@@ -3,13 +3,21 @@
 import React from 'react';
 import { DoingWellItem, ActiveTab } from '@/lib/types';
 import { Sparkles, ArrowRight } from 'lucide-react';
+import { SupportedLanguage, translations } from '@/lib/i18n';
 
 interface DoingWellSectionProps {
   items: DoingWellItem[];
   onNavigate: (tab: ActiveTab, productId?: string) => void;
+  lang?: SupportedLanguage;
 }
 
-export const DoingWellSection: React.FC<DoingWellSectionProps> = ({ items, onNavigate }) => {
+export const DoingWellSection: React.FC<DoingWellSectionProps> = ({
+  items,
+  onNavigate,
+  lang = 'en',
+}) => {
+  const t = translations[lang] || translations.en;
+
   return (
     <div className="rounded-2xl border border-emerald-300/80 bg-emerald-50/25 p-5 shadow-xs">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/60 pb-3.5">
@@ -20,14 +28,14 @@ export const DoingWellSection: React.FC<DoingWellSectionProps> = ({ items, onNav
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-extrabold uppercase tracking-wide text-emerald-950 sm:text-lg">
-                Doing Well
+                {t.doingWellTitle}
               </h2>
               <span className="rounded-full bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 text-[11px] font-bold text-emerald-900">
                 {items.length} Positive {items.length === 1 ? 'Signal' : 'Signals'}
               </span>
             </div>
             <p className="text-xs font-medium text-emerald-900/80 mt-0.5">
-              Top revenue drivers, growing customer demand, and healthy inventory buffers
+              {t.doingWellSubtitle}
             </p>
           </div>
         </div>
@@ -75,7 +83,7 @@ export const DoingWellSection: React.FC<DoingWellSectionProps> = ({ items, onNav
                   onClick={() => onNavigate(item.targetSection, item.productId)}
                   className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-900 transition-colors shrink-0"
                 >
-                  <span>View</span>
+                  <span>{t.btnInspect}</span>
                   <ArrowRight className="h-3 w-3" />
                 </button>
               </div>

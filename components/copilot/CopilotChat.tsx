@@ -15,41 +15,75 @@ import {
   Sparkles,
   Clock,
   RotateCcw,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
+import { SupportedLanguage } from '@/lib/i18n';
 
 interface CopilotChatProps {
   summary: PeriodSummary;
   inventory: CalculatedInventoryItem[];
   productPerformance: ProductPerformance[];
+  lang?: SupportedLanguage;
 }
 
 export const CopilotChat: React.FC<CopilotChatProps> = ({
   summary,
   inventory,
   productPerformance,
+  lang = 'en',
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
       id: 'welcome',
       sender: 'assistant',
-      text: `Hello! I am your **BizCopilot Intelligence Advisor** for FreshMart Grocery.\n\nI monitor your daily store revenue, velocity shifts, stockout threats, and dead stock exposure in real time.\n\nAsk me questions below or click one of the suggested prompts to see live answers calculated from your active store dataset.`,
+      text:
+        lang === 'kn'
+          ? `ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ **BizCopilot AI ವ್ಯಾಪಾರ ಸಲಹೆಗಾರ**.\n\nನಿಮ್ಮ ದಿನನಿತ್ಯದ ಅಂಗಡಿ ಮಾರಾಟ, ದಾಸ್ತಾನು ಕೊರತೆಯ ಅಪಾಯಗಳು ಮತ್ತು ಮಾರಾಟವಾಗದ ವಸ್ತುಗಳ ಬಗ್ಗೆ ನೇರವಾಗಿ ಪರಿಶೀಲಿಸುತ್ತೇನೆ.\n\nಕೆಳಗಿನ ಪ್ರಶ್ನೆಗಳನ್ನು ಕ್ಲಿಕ್ ಮಾಡಿ ಅಥವಾ ನಿಮ್ಮ ಪ್ರಶ್ನೆಯನ್ನು ಕೇಳಿ.`
+          : lang === 'hi'
+          ? `नमस्ते! मैं आपका **BizCopilot AI व्यापार सलाहकार** हूं।\n\nमैं आपकी दुकान की दैनिक बिक्री, स्टॉक खत्म होने के खतरे और रुके हुए माल की रीयल-टाइम निगरानी करता हूं।\n\nनीचे दिए गए सुझावों पर क्लिक करें या अपना सवाल पूछें।`
+          : `Hello! I am your **BizCopilot Intelligence Advisor** for FreshMart Grocery.\n\nI monitor your daily store revenue, velocity shifts, stockout threats, and dead stock exposure in real time.\n\nAsk me questions below or click one of the suggested prompts to see live answers calculated from your active store dataset.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      suggestedFollowUps: [
-        'Which products should I reorder first?',
-        'Why did my sales drop this week?',
-        'Which products are tying up my cash?',
-        'What are my top-selling products?',
-        'Give me the top three actions I should take today.',
-      ],
+      suggestedFollowUps:
+        lang === 'kn'
+          ? [
+              'ನಾನು ಮೊದಲು ಯಾವ ವಸ್ತುಗಳನ್ನು ರೀಆರ್ಡರ್ ಮಾಡಬೇಕು?',
+              'ಈ ವಾರ ಮಾರಾಟ ಯಾಕೆ ಕಡಿಮೆಯಾಗಿದೆ?',
+              'ಯಾವ ವಸ್ತುಗಳಲ್ಲಿ ಹಣ ಸಿಲುಕಿಕೊಂಡಿದೆ?',
+              'ಇಂದೇ ನಾನು ಮಾಡಬೇಕಾದ ಮುಖ್ಯ ಕೆಲಸಗಳೇನು?',
+            ]
+          : lang === 'hi'
+          ? [
+              'मुझे पहले कौन सा सामान रीऑर्डर करना चाहिए?',
+              'इस हफ्ते बिक्री क्यों घटी?',
+              'किन उत्पादों में पैसा फंसा हुआ है?',
+              'आज मुझे कौन से 3 कदम उठाने चाहिए?',
+            ]
+          : [
+              'Which products should I reorder first?',
+              'Why did my sales drop this week?',
+              'Which products are tying up my cash?',
+              'What are my top-selling products?',
+              'Give me the top three actions I should take today.',
+            ],
       dataBadges: [
         { label: 'Active SKUs', value: `${inventory.length}`, color: 'emerald' },
-        { label: 'Stockout Risks', value: `${summary.stockoutRiskCount}`, color: summary.stockoutRiskCount > 0 ? 'red' : 'emerald' },
+        {
+          label: 'Stockout Risks',
+          value: `${summary.stockoutRiskCount}`,
+          color: summary.stockoutRiskCount > 0 ? 'red' : 'emerald',
+        },
       ],
     },
   ]);
 
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechEnabled, setSpeechEnabled] = useState(true);
+  const [aiMode, setAiMode] = useState<'deterministic' | 'ai-enhanced'>('deterministic');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -60,7 +94,72 @@ export const CopilotChat: React.FC<CopilotChatProps> = ({
     scrollToBottom();
   }, [messages, isTyping]);
 
-  const handleSendMessage = (textToSend?: string) => {
+  // Voice synthesis helper
+  const speakText = (text: string) => {
+    if (!speechEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      const cleanText = text.replace(/[*#_`]/g, '');
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = lang === 'kn' ? 'kn-IN' : lang === 'hi' ? 'hi-IN' : 'en-IN';
+      utterance.rate = 1.0;
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('SpeechSynthesis error:', e);
+    }
+  };
+
+  // Web Speech API Voice Input
+  const toggleSpeechRecognition = () => {
+    if (typeof window === 'undefined') return;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionClass) {
+      alert('Speech recognition is not supported in this browser. Please use Chrome or Edge.');
+      return;
+    }
+
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognitionClass();
+      recognition.lang = lang === 'kn' ? 'kn-IN' : lang === 'hi' ? 'hi-IN' : 'en-IN';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(transcript);
+        setIsListening(false);
+        handleSendMessage(transcript);
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.warn('SpeechRecognition failed:', err);
+      setIsListening(false);
+    }
+  };
+
+  const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || input).trim();
     if (!query) return;
 
@@ -75,7 +174,74 @@ export const CopilotChat: React.FC<CopilotChatProps> = ({
     if (!textToSend) setInput('');
     setIsTyping(true);
 
-    // Simulate subtle conversational delay
+    try {
+      // 1. Try server-side /api/advise route (Gemini or deterministic with aggregated facts)
+      const stockoutRisks = inventory
+        .filter((i) => i.isStockoutRisk)
+        .map((i) => ({
+          productName: i.productName,
+          daysOfCover: i.daysOfCover,
+          supplierLeadDays: i.supplierLeadDays,
+          reorderQuantity: i.recommendedReorderQty,
+          stockOnHand: i.stockOnHand,
+        }));
+
+      const deadStock = inventory
+        .filter((i) => i.isDeadStock)
+        .map((i) => ({
+          productName: i.productName,
+          stockOnHand: i.stockOnHand,
+          costValue: i.deadStockValue,
+          unitsSold: i.unitsSoldInPeriod,
+        }));
+
+      const res = await fetch('/api/advise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          language: lang,
+          question: query,
+          stockoutRisks,
+          deadStock,
+          totalRevenue: summary.totalRevenue,
+          revenueChangePct: summary.revenueChangePct,
+          totalUnitsSold: summary.totalUnitsSold,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.advice) {
+          setAiMode(data.mode === 'ai-enhanced' ? 'ai-enhanced' : 'deterministic');
+          const assistantMsg: ChatMessage = {
+            id: `assistant-${Date.now()}`,
+            sender: 'assistant',
+            text: data.advice,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            suggestedFollowUps: [
+              'Which products should I reorder first?',
+              'Which products are tying up my cash?',
+              'Show me top 3 actions today',
+            ],
+            dataBadges: [
+              {
+                label: 'Mode',
+                value: data.mode === 'ai-enhanced' ? 'Gemini AI' : 'Deterministic Facts',
+                color: 'emerald',
+              },
+            ],
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+          setIsTyping(false);
+          speakText(data.advice);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('API advise call failed, using client-side copilot engine:', e);
+    }
+
+    // Client fallback copilot response
     setTimeout(() => {
       const response = generateCopilotResponse(query, {
         summary,
@@ -91,7 +257,8 @@ export const CopilotChat: React.FC<CopilotChatProps> = ({
 
       setMessages((prev) => [...prev, assistantMsg]);
       setIsTyping(false);
-    }, 450);
+      speakText(assistantMsg.text);
+    }, 300);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -112,49 +279,84 @@ export const CopilotChat: React.FC<CopilotChatProps> = ({
           'Which products should I reorder first?',
           'Why did my sales drop this week?',
           'Which products are tying up my cash?',
-          'What are my top-selling products?',
         ],
       },
     ]);
   };
 
-  const samplePrompts = [
-    'Why did my sales drop this week?',
-    'Which products should I reorder first?',
-    'Which products are tying up my cash?',
-    'What are my top-selling products?',
-    'Give me the top three actions I should take today.',
-  ];
+  const samplePrompts =
+    lang === 'kn'
+      ? [
+          'ನಾನು ಮೊದಲು ಯಾವ ವಸ್ತುಗಳನ್ನು ರೀಆರ್ಡರ್ ಮಾಡಬೇಕು?',
+          'ಈ ವಾರ ಮಾರಾಟ ಯಾಕೆ ಕಡಿಮೆಯಾಗಿದೆ?',
+          'ಯಾವ ವಸ್ತುಗಳಲ್ಲಿ ಹಣ ಸಿಲುಕಿಕೊಂಡಿದೆ?',
+          'ಇಂದೇ ನಾನು ಮಾಡಬೇಕಾದ ಮುಖ್ಯ ಕೆಲಸಗಳೇನು?',
+        ]
+      : lang === 'hi'
+      ? [
+          'मुझे पहले कौन सा सामान रीऑर्डर करना चाहिए?',
+          'इस हफ्ते बिक्री क्यों घटी?',
+          'किन उत्पादों में पैसा फंसा हुआ है?',
+          'आज मुझे कौन से 3 कदम उठाने चाहिए?',
+        ]
+      : [
+          'Which products should I reorder first?',
+          'Why did my sales drop this week?',
+          'Which products are tying up my cash?',
+          'What are my top-selling products?',
+          'Give me the top three actions I should take today.',
+        ];
 
   return (
     <div className="flex flex-col h-[calc(100vh-140px)] min-h-[550px] rounded-2xl border border-slate-200/80 bg-white shadow-xs overflow-hidden">
       {/* Chat Header */}
-      <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
+      <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-3.5">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-sm">
             <Bot className="h-5 w-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-bold text-slate-900">Ask BizCopilot</h2>
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                Deterministic Advisor
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                  aiMode === 'ai-enhanced'
+                    ? 'bg-purple-100 text-purple-800'
+                    : 'bg-emerald-100 text-emerald-800'
+                }`}
+              >
+                {aiMode === 'ai-enhanced' ? 'Gemini AI Verified' : 'Deterministic Facts'}
               </span>
             </div>
             <p className="text-xs text-slate-500">
-              Instant answers grounded in your live sales and inventory dataset
+              Grounded strictly in computed numbers • Voice & Multilingual
             </p>
           </div>
         </div>
 
-        <button
-          onClick={handleClearHistory}
-          className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-          title="Reset conversation"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-          <span>Clear</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Read aloud toggle */}
+          <button
+            onClick={() => setSpeechEnabled(!speechEnabled)}
+            className={`rounded-lg border p-1.5 transition-colors ${
+              speechEnabled
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-slate-200 text-slate-400'
+            }`}
+            title={speechEnabled ? 'Mute voice readout' : 'Enable voice readout'}
+          >
+            {speechEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          </button>
+
+          <button
+            onClick={handleClearHistory}
+            className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            title="Reset conversation"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Clear</span>
+          </button>
+        </div>
       </div>
 
       {/* Suggested Prompt Chips Bar */}
@@ -290,12 +492,32 @@ export const CopilotChat: React.FC<CopilotChatProps> = ({
           }}
           className="flex items-center gap-2"
         >
+          {/* Voice Mic Button */}
+          <button
+            type="button"
+            onClick={toggleSpeechRecognition}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-all ${
+              isListening
+                ? 'bg-rose-500 border-rose-600 text-white animate-pulse'
+                : 'border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+            title={isListening ? 'Listening... click to stop' : 'Speak your question'}
+          >
+            {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+          </button>
+
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask BizCopilot about your sales drops, stockouts, or reorders..."
+            placeholder={
+              lang === 'kn'
+                ? 'ನಿಮ್ಮ ಅಂಗಡಿ ಮಾರಾಟ, ದಾಸ್ತಾನು ಕೊರತೆಯ ಬಗ್ಗೆ ಕೇಳಿ...'
+                : lang === 'hi'
+                ? 'अपनी दुकान की बिक्री या स्टॉक के बारे में पूछें...'
+                : 'Ask BizCopilot about your sales drops, stockouts, or reorders...'
+            }
             className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-hidden"
           />
           <button
@@ -308,7 +530,7 @@ export const CopilotChat: React.FC<CopilotChatProps> = ({
           </button>
         </form>
         <div className="mt-2 text-center text-[11px] text-slate-400">
-          Rule-based intelligence MVP • Runs 100% locally in your browser • No API keys required
+          FACTS FIRST: Pure code calculations • Local-first privacy • Voice input & readout
         </div>
       </div>
     </div>

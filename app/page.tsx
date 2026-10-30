@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ActiveTab,
   InventoryItem,
@@ -28,15 +28,20 @@ import {
   generateAIRecommendations,
 } from '@/lib/recommendation-engine';
 import {
-  loadSalesData,
-  saveSalesData,
-  loadInventoryData,
-  saveInventoryData,
-  resetDemoData,
-} from '@/lib/storage';
+  initDatabase,
+  resetDatabaseToDemo,
+  saveImportedDataToDb,
+  getDbActions,
+  updateDbActionStatus,
+  getDbSetting,
+  setDbSetting,
+  DBAction,
+} from '@/lib/db';
+import { SupportedLanguage, translations } from '@/lib/i18n';
 
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
+import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { SalesTrendChart } from '@/components/dashboard/SalesTrendChart';
 import { ProductPerformanceChart } from '@/components/dashboard/ProductPerformanceChart';
@@ -44,6 +49,8 @@ import { HealthSummaryCard } from '@/components/dashboard/HealthSummaryCard';
 import { ActTodaySection } from '@/components/dashboard/ActTodaySection';
 import { WatchThisWeekSection } from '@/components/dashboard/WatchThisWeekSection';
 import { DoingWellSection } from '@/components/dashboard/DoingWellSection';
+import { OnboardingModal } from '@/components/onboarding/OnboardingModal';
+import { MoneySavedDialog } from '@/components/dashboard/MoneySavedDialog';
 
 import { SalesView } from '@/components/sales/SalesView';
 import { InventoryView } from '@/components/inventory/InventoryView';
@@ -60,6 +67,7 @@ import {
   ArrowRight,
   Store,
   LineChart,
+  ShieldCheck,
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -72,18 +80,63 @@ export default function HomePage() {
   const [highlightProductId, setHighlightProductId] = useState<string | undefined>(undefined);
   const [isMounted, setIsMounted] = useState<boolean>(false);
 
-  // Load persisted records on client mount
+  // Advanced features state
+  const [mode, setMode] = useState<'owner' | 'analyst'>('owner');
+  const [lang, setLang] = useState<SupportedLanguage>('en');
+  const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
+  const [isMoneySavedOpen, setIsMoneySavedOpen] = useState<boolean>(false);
+  const [dbActions, setDbActions] = useState<DBAction[]>([]);
+
+  // Load persisted records from Dexie on client mount
   useEffect(() => {
     setIsMounted(true);
-    const savedSales = loadSalesData();
-    const savedInv = loadInventoryData();
-    if (savedSales !== INITIAL_SALES_RECORDS) {
-      setSalesRecords(savedSales);
-      setIsCustomData(true);
-    }
-    if (savedInv !== INITIAL_INVENTORY) {
-      setInventoryItems(savedInv);
-    }
+
+    const loadData = async () => {
+      try {
+        const { sales, inventory } = await initDatabase();
+        if (sales && sales.length > 0) {
+          setSalesRecords(sales);
+          if (sales !== INITIAL_SALES_RECORDS && sales.length !== INITIAL_SALES_RECORDS.length) {
+            setIsCustomData(true);
+          }
+        }
+        if (inventory && inventory.length > 0) {
+          setInventoryItems(inventory);
+        }
+
+        const actions = await getDbActions();
+        setDbActions(actions);
+
+        const savedLang = (await getDbSetting('language', 'en')) as SupportedLanguage;
+        setLang(savedLang);
+
+        const savedMode = (await getDbSetting('mode', 'owner')) as 'owner' | 'analyst';
+        setMode(savedMode);
+
+        const onboardingDone = await getDbSetting('onboardingComplete', 'false');
+        if (onboardingDone !== 'true') {
+          setIsTourOpen(true);
+        }
+      } catch (e) {
+        console.error('Dexie initial load error:', e);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const t = translations[lang] || translations.en;
+
+  // Language update with persistence
+  const handleSetLang = useCallback(async (newLang: SupportedLanguage) => {
+    setLang(newLang);
+    await setDbSetting('language', newLang);
+  }, []);
+
+  // Mode update with persistence
+  const handleSetMode = useCallback(async (newMode: 'owner' | 'analyst') => {
+    setMode(newMode);
+    await setDbSetting('mode', newMode);
   }, []);
 
   // Compute analytics deterministically
@@ -120,6 +173,62 @@ export default function HomePage() {
     return generateAIRecommendations(inventoryMetrics, productPerformance);
   }, [inventoryMetrics, productPerformance]);
 
+  // Calculate Money Saved total from completed actions
+  const totalMoneySaved = useMemo(() => {
+    return dbActions
+      .filter((a) => a.status === 'done')
+      .reduce((sum, a) => sum + (a.impactValue || 0), 0);
+  }, [dbActions]);
+
+  // Handle marking an action as Done
+  const handleActionDone = async (
+    productId: string,
+    productName: string,
+    impactValue: number
+  ) => {
+    const existing = dbActions.find((a) => a.productId === productId);
+    if (existing && existing.id) {
+      await updateDbActionStatus(existing.id, 'done');
+    }
+    setDbActions((prev) => {
+      const idx = prev.findIndex((a) => a.productId === productId);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = {
+          ...copy[idx],
+          status: 'done',
+          impactValue,
+          completedAt: new Date().toISOString(),
+        };
+        return copy;
+      } else {
+        return [
+          ...prev,
+          {
+            storeId: 1,
+            type: 'reorder',
+            productId,
+            productName,
+            description: `Replenished stock of ${productName}`,
+            suggestedAction: 'Order placed',
+            impactValue,
+            status: 'done',
+            createdAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+          },
+        ];
+      }
+    });
+  };
+
+  const handleActionDismiss = async (productId: string) => {
+    const existing = dbActions.find((a) => a.productId === productId);
+    if (existing && existing.id) {
+      await updateDbActionStatus(existing.id, 'dismissed');
+    }
+    setDbActions((prev) => prev.filter((a) => a.productId !== productId));
+  };
+
   // Handle navigation with optional product context
   const handleNavigate = (tab: ActiveTab, productId?: string) => {
     setActiveTab(tab);
@@ -128,22 +237,28 @@ export default function HomePage() {
     }
   };
 
-  // Import custom CSV data
-  const handleImportSuccess = (newSales: SalesRecord[], newInventory: InventoryItem[]) => {
+  // Import custom CSV/Excel data
+  const handleImportSuccess = async (newSales: SalesRecord[], newInventory: InventoryItem[]) => {
     setSalesRecords(newSales);
     setInventoryItems(newInventory);
     setIsCustomData(true);
-    saveSalesData(newSales);
-    saveInventoryData(newInventory);
+    await saveImportedDataToDb(newSales, newInventory);
   };
 
   // Reset to default FreshMart demo data
-  const handleResetData = () => {
-    const res = resetDemoData();
+  const handleResetData = async () => {
+    const res = await resetDatabaseToDemo();
     setSalesRecords(res.sales);
     setInventoryItems(res.inventory);
     setIsCustomData(false);
     setHighlightProductId(undefined);
+    const actions = await getDbActions();
+    setDbActions(actions);
+  };
+
+  const handleCloseTour = async () => {
+    setIsTourOpen(false);
+    await setDbSetting('onboardingComplete', 'true');
   };
 
   if (!isMounted) {
@@ -159,7 +274,7 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900">
-      {/* Sidebar */}
+      {/* Sidebar (Desktop) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -167,6 +282,7 @@ export default function HomePage() {
         setMobileOpen={setMobileOpen}
         stockoutCount={actTodayItems.length}
         recommendationCount={aiRecommendations.length}
+        lang={lang}
       />
 
       {/* Main Content Area */}
@@ -179,10 +295,17 @@ export default function HomePage() {
           onResetData={handleResetData}
           setMobileOpen={setMobileOpen}
           isCustomData={isCustomData}
+          mode={mode}
+          setMode={handleSetMode}
+          lang={lang}
+          setLang={handleSetLang}
+          moneySaved={totalMoneySaved}
+          onOpenMoneySaved={() => setIsMoneySavedOpen(true)}
+          onOpenTour={() => setIsTourOpen(true)}
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          {/* TAB 1: REDESIGNED OVERVIEW DASHBOARD */}
+          {/* TAB 1: OVERVIEW DASHBOARD */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Store Context Banner */}
@@ -196,8 +319,17 @@ export default function HomePage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <h2 className="text-xl font-bold text-slate-900">{STORE_NAME}</h2>
                         <span className="rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 text-xs font-semibold">
-                          Sample Store Dataset
+                          {isCustomData ? t.customData : t.sampleData}
                         </span>
+                        {mode === 'owner' ? (
+                          <span className="rounded-full bg-slate-900 text-white px-2 py-0.5 text-xs font-bold">
+                            {t.ownerMode}
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-indigo-100 text-indigo-800 px-2 py-0.5 text-xs font-bold">
+                            {t.analystMode}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
                         {STORE_TYPE} • {STORE_LOCATION} • Reporting: {periodSummary.startDate} to {periodSummary.endDate} ({periodDays} days)
@@ -205,45 +337,55 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {totalMoneySaved > 0 && (
+                      <button
+                        onClick={() => setIsMoneySavedOpen(true)}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-300 px-3.5 py-2 text-xs font-bold text-emerald-900 shadow-xs hover:bg-emerald-100 transition-all"
+                      >
+                        <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                        <span>{t.moneySaved}: {formatINR(totalMoneySaved)}</span>
+                      </button>
+                    )}
+
                     <button
                       onClick={() => setActiveTab('copilot')}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition-all active:scale-[0.98]"
                     >
                       <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>Ask Copilot Today&apos;s Actions</span>
+                      <span>{t.askCopilotBtn}</span>
                       <ArrowRight className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* 4 Owner-Friendly Metric Cards */}
+              {/* 4 Owner-Friendly Metric Cards (shown in Analyst mode or accessible in Owner mode) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
-                  title="Total Shop Sales"
+                  title={t.metricSalesTitle}
                   value={formatINR(periodSummary.totalRevenue)}
                   changePct={periodSummary.revenueChangePct}
                   comparisonLabel={`vs previous ${periodDays}d`}
                   icon={IndianRupee}
                   iconColor="text-emerald-700"
                   iconBg="bg-emerald-50"
-                  tooltip="Total revenue received over the selected period. How we calculated this: sum of (units sold × selling price) across all days."
+                  tooltip={t.metricSalesTooltip}
                 />
 
                 <MetricCard
-                  title="Total Items Sold"
+                  title={t.metricUnitsTitle}
                   value={formatNumber(periodSummary.totalUnitsSold)}
                   changePct={periodSummary.unitsChangePct}
                   comparisonLabel={`vs previous ${periodDays}d`}
                   icon={ShoppingBag}
                   iconColor="text-teal-700"
                   iconBg="bg-teal-50"
-                  tooltip="Total physical quantity of grocery packets sold in this period."
+                  tooltip={t.metricUnitsTooltip}
                 />
 
                 <MetricCard
-                  title="Stockout Risks"
+                  title={t.metricStockoutTitle}
                   value={`${periodSummary.stockoutRiskCount} ${periodSummary.stockoutRiskCount === 1 ? 'Product' : 'Products'}`}
                   statusBadge={periodSummary.stockoutRiskCount > 0 ? 'Urgent Order' : 'All Protected'}
                   badgeColor={
@@ -254,11 +396,11 @@ export default function HomePage() {
                   icon={AlertTriangle}
                   iconColor={periodSummary.stockoutRiskCount > 0 ? 'text-rose-600' : 'text-emerald-600'}
                   iconBg={periodSummary.stockoutRiskCount > 0 ? 'bg-rose-50' : 'bg-emerald-50'}
-                  tooltip="Products where current stock left will run out before supplier delivery arrives."
+                  tooltip={t.metricStockoutTooltip}
                 />
 
                 <MetricCard
-                  title="Money in Unsold Stock"
+                  title={t.metricDeadStockTitle}
                   value={formatINR(periodSummary.deadStockTotalCost)}
                   statusBadge={
                     periodSummary.deadStockCount > 0
@@ -273,49 +415,69 @@ export default function HomePage() {
                   icon={PackageX}
                   iconColor="text-amber-600"
                   iconBg="bg-amber-50"
-                  tooltip="Cash tied up in products with zero or near-zero sales recently. Calculated using wholesale unit cost × stock quantity."
+                  tooltip={t.metricDeadStockTooltip}
                 />
               </div>
 
-              {/* SECTION 1: ACT TODAY (Critical emergencies) */}
-              <ActTodaySection items={actTodayItems} onNavigate={handleNavigate} />
+              {/* SECTION 1: ACT TODAY (Critical problems) */}
+              <ActTodaySection
+                items={actTodayItems}
+                onNavigate={handleNavigate}
+                onActionDone={handleActionDone}
+                onActionDismiss={handleActionDismiss}
+                lang={lang}
+                storeName={STORE_NAME}
+              />
 
               {/* SECTION 2: WATCH THIS WEEK (Decisions needed this week) */}
-              <WatchThisWeekSection items={watchThisWeekItems} onNavigate={handleNavigate} />
+              <WatchThisWeekSection
+                items={watchThisWeekItems}
+                onNavigate={handleNavigate}
+                onActionDone={handleActionDone}
+                onActionDismiss={handleActionDismiss}
+                lang={lang}
+              />
 
               {/* SECTION 3: DOING WELL (Positive business signals) */}
-              <DoingWellSection items={doingWellItems} onNavigate={handleNavigate} />
+              <DoingWellSection
+                items={doingWellItems}
+                onNavigate={handleNavigate}
+                lang={lang}
+              />
 
-              {/* Business Health Scorecard */}
-              <HealthSummaryCard summary={periodSummary} />
+              {/* In Analyst Mode: Show Health Scorecard and Charts */}
+              {mode === 'analyst' && (
+                <>
+                  <HealthSummaryCard summary={periodSummary} />
 
-              {/* Visual Analytics Trends & Top Contribution */}
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
-                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                      <LineChart className="h-4 w-4" />
+                  <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
+                    <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                          <LineChart className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-bold text-slate-900">Store Performance & Trends</h3>
+                          <p className="text-xs text-slate-500">Daily turnover patterns and highest earning product lines</p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => setActiveTab('sales')}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+                      >
+                        <span>Detailed Sales Analytics</span>
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
                     </div>
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900">Store Performance & Trends</h3>
-                      <p className="text-xs text-slate-500">Daily turnover patterns and highest earning product lines</p>
+
+                    <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <SalesTrendChart data={salesTrend} periodDays={periodDays} />
+                      <ProductPerformanceChart products={productPerformance} />
                     </div>
                   </div>
-
-                  <button
-                    onClick={() => setActiveTab('sales')}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
-                  >
-                    <span>Detailed Sales Analytics</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
-                <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <SalesTrendChart data={salesTrend} periodDays={periodDays} />
-                  <ProductPerformanceChart products={productPerformance} />
-                </div>
-              </div>
+                </>
+              )}
             </div>
           )}
 
@@ -338,6 +500,8 @@ export default function HomePage() {
               periodDays={periodDays}
               highlightProductId={highlightProductId}
               onNavigate={handleNavigate}
+              lang={lang}
+              storeName={STORE_NAME}
             />
           )}
 
@@ -355,20 +519,49 @@ export default function HomePage() {
               summary={periodSummary}
               inventory={inventoryMetrics}
               productPerformance={productPerformance}
+              lang={lang}
             />
           )}
 
-          {/* TAB 6: DATA IMPORT (CSV) */}
+          {/* TAB 6: DATA IMPORT (CSV & Excel) */}
           {activeTab === 'import' && (
             <DataImportView
               currentInventory={inventoryItems}
               onImportSuccess={handleImportSuccess}
               onResetData={handleResetData}
               onNavigate={setActiveTab}
+              lang={lang}
             />
           )}
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation (Visible on screen < 1024px) */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        lang={lang}
+        stockoutCount={actTodayItems.length}
+      />
+
+      {/* Onboarding Wizard Modal */}
+      <OnboardingModal
+        isOpen={isTourOpen}
+        onClose={handleCloseTour}
+        currentLang={lang}
+        onSelectLang={handleSetLang}
+        currentMode={mode}
+        onSelectMode={handleSetMode}
+        onChooseUpload={() => setActiveTab('import')}
+      />
+
+      {/* Money Saved Breakdown Dialog */}
+      <MoneySavedDialog
+        isOpen={isMoneySavedOpen}
+        onClose={() => setIsMoneySavedOpen(false)}
+        actions={dbActions}
+        lang={lang}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ActiveTab } from '@/lib/types';
 import { STORE_NAME, STORE_TYPE } from '@/lib/demo-data';
+import { SupportedLanguage, translations } from '@/lib/i18n';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -21,6 +22,7 @@ interface SidebarProps {
   setMobileOpen: (open: boolean) => void;
   stockoutCount: number;
   recommendationCount: number;
+  lang?: SupportedLanguage;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -30,43 +32,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setMobileOpen,
   stockoutCount,
   recommendationCount,
+  lang = 'en',
 }) => {
+  const t = translations[lang] || translations.en;
+
   const navItems = [
     {
       id: 'overview' as ActiveTab,
-      label: 'Overview',
+      label: t.navOverview,
       icon: LayoutDashboard,
       badge: stockoutCount > 0 ? `${stockoutCount} alert` : undefined,
       badgeColor: 'bg-red-50 text-red-700 border-red-200',
     },
     {
       id: 'sales' as ActiveTab,
-      label: 'Sales Analytics',
+      label: t.navSales,
       icon: TrendingUp,
     },
     {
       id: 'inventory' as ActiveTab,
-      label: 'Inventory Intelligence',
+      label: t.navInventory,
       icon: Boxes,
       badge: stockoutCount > 0 ? `${stockoutCount} risk` : undefined,
       badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
     },
     {
       id: 'recommendations' as ActiveTab,
-      label: 'AI Recommendations',
+      label: t.navRecommendations,
       icon: Sparkles,
       badge: recommendationCount > 0 ? `${recommendationCount}` : undefined,
       badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     },
     {
       id: 'copilot' as ActiveTab,
-      label: 'AI Copilot',
+      label: t.navCopilot,
       icon: Bot,
       pulse: true,
     },
     {
       id: 'import' as ActiveTab,
-      label: 'Data Import (CSV)',
+      label: t.navImport,
       icon: UploadCloud,
     },
   ];
@@ -100,7 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   AI MVP
                 </span>
               </div>
-              <p className="text-xs font-medium text-slate-500">Sales & Inventory Advisor</p>
+              <p className="text-xs font-medium text-slate-500">{t.tagline}</p>
             </div>
           </div>
           <button
