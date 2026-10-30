@@ -200,18 +200,38 @@ export const CopilotChat: React.FC<CopilotChatProps> = ({
           unitsSold: i.unitsSoldInPeriod,
         }));
 
-      const res = await fetch('/api/advise', {
+      const res = await fetch('/api/advisor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           language: lang,
           question: query,
-          stockoutRisks,
-          deadStock,
-          totalRevenue: summary.totalRevenue,
-          revenueChangePct: summary.revenueChangePct,
-          totalUnitsSold: summary.totalUnitsSold,
-          categoryId: category?.id,
+          stream: false,
+          metrics: {
+            storeName,
+            categoryName: category?.labels[lang] || category?.labels.en,
+            topSellers: productPerformance.map((p) => ({
+              name: p.productName,
+              unitsSold: p.unitsSold,
+              revenue: p.revenue,
+            })),
+            lowStock: stockoutRisks.map((r) => ({
+              name: r.productName,
+              daysOfStockLeft: Math.round(r.daysOfCover),
+              supplierLeadDays: r.supplierLeadDays,
+              recommendedReorder: r.reorderQuantity,
+              stockOnHand: r.stockOnHand,
+            })),
+            weeklySalesTrend: [],
+            upcomingFestivals: [],
+            deadStock: deadStock.map((d) => ({
+              name: d.productName,
+              stockOnHand: d.stockOnHand,
+              lockedCost: d.costValue,
+            })),
+            totalRevenue: summary.totalRevenue,
+            revenueChangePct: summary.revenueChangePct,
+          },
         }),
       });
 
