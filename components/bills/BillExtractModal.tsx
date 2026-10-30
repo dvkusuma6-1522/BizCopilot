@@ -62,58 +62,74 @@ export const BillExtractModal: React.FC<BillExtractModalProps> = ({
     en: {
       title: 'Scan Supplier Bill',
       subtitle: 'Photo of invoice directly to stock inventory',
-      consentNotice: 'Privacy Notice: This photo is sent to Google AI solely to read the bill lines. Your sales data and customer records never leave your device.',
+      consentNotice: 'Privacy Notice: This image is sent to Google Gemini to extract text and is not stored by BizCopilot. Your sales data and customer records never leave your device.',
       captureButton: 'Take Photo of Bill',
       uploadButton: 'Choose from Gallery',
-      processing: 'Analyzing bill with AI...',
+      processing: 'Analyzing bill with Gemini...',
       reviewTitle: 'Review Bill Line Items',
       supplier: 'Supplier',
       date: 'Bill Date',
       addToStock: 'Add Checked Items to Stock',
       newProductNotice: '(New item will be created)',
       manualEntry: 'Add Item Manually',
+      quotaExceeded: 'Daily AI scan quota reached for Google Gemini. You can enter items manually below.',
+      rateLimited: 'Rate limit reached (10 requests/min). Please wait a moment before trying again.',
+      fileTooLarge: 'Image is larger than 4 MB. Please use a smaller or compressed photo.',
+      genericError: 'Failed to extract bill items. You can add items manually below.',
     },
     kn: {
       title: 'ಸರಬರಾಜುದಾರರ ಬಿಲ್ ಸ್ಕ್ಯಾನ್',
       subtitle: 'ಬಿಲ್ ಫೋಟೋದಿಂದ ನೇರವಾಗಿ ಸ್ಟಾಕ್‌ಗೆ ನಮೂದಿಸಿ',
-      consentNotice: 'ಗೌಪ್ಯತೆ ಮಾಹಿತಿ: ಬಿಲ್ ವಿವರಗಳನ್ನು ಓದಲು ಮಾತ್ರ ಈ ಫೋಟೋವನ್ನು ಗೂಗಲ್ ಎಐಗೆ ಕಳುಹಿಸಲಾಗುತ್ತದೆ. ನಿಮ್ಮ ಮಾರಾಟದ ಮಾಹಿತಿ ಸಾಧನದಲ್ಲೇ ಸುರಕ್ಷಿತವಾಗಿರುತ್ತದೆ.',
+      consentNotice: 'ಗೌಪ್ಯತೆ ಮಾಹಿತಿ: ಬಿಲ್ ವಿವರಗಳನ್ನು ಓದಲು ಮಾತ್ರ ಈ ಚಿತ್ರವನ್ನು ಗೂಗಲ್ ಜೆಮಿನಿಗೆ (Google Gemini) ಕಳುಹಿಸಲಾಗುತ್ತದೆ, ಬಿಜ್‌ಕೋಪೈಲಟ್‌ನಲ್ಲಿ ಸಂಗ್ರಹಿಸಲಾಗುವುದಿಲ್ಲ. ನಿಮ್ಮ ಮಾರಾಟದ ಮಾಹಿತಿ ಸಾಧನದಲ್ಲೇ ಇರುತ್ತದೆ.',
       captureButton: 'ಬಿಲ್ ಫೋಟೋ ತೆಗೆಯಿರಿ',
       uploadButton: 'ಗ್ಯಾಲರಿಯಿಂದ ಆಯ್ಕೆಮಾಡಿ',
-      processing: 'ಎಐ ಮೂಲಕ ಬಿಲ್ ಪರಿಶೀಲಿಸಲಾಗುತ್ತಿದೆ...',
+      processing: 'ಜೆಮಿನಿ ಮೂಲಕ ಬಿಲ್ ಪರಿಶೀಲಿಸಲಾಗುತ್ತಿದೆ...',
       reviewTitle: 'ಬಿಲ್ ಸರಕುಗಳ ಪರಿಶೀಲನೆ',
       supplier: 'ಸರಬರಾಜುದಾರರು',
       date: 'ಬಿಲ್ ದಿನಾಂಕ',
       addToStock: 'ಆಯ್ಕೆಮಾಡಿದ ಸರಕುಗಳನ್ನು ಸ್ಟಾಕ್‌ಗೆ ಸೇರಿಸಿ',
       newProductNotice: '(ಹೊಸ ಸರಕಾಗಿ ಸೇರಿಸಲಾಗುತ್ತದೆ)',
       manualEntry: 'ಹಸ್ತಚಾಲಿತವಾಗಿ ಸೇರಿಸಿ',
+      quotaExceeded: 'ಗೂಗಲ್ ಜೆಮಿನಿ ದಿನದ ಎಐ ಮಿತಿ ಮೀರಿದೆ. ದಯವಿಟ್ಟು ಕೆಳಗೆ ಹಸ್ತಚಾಲಿತವಾಗಿ ಸರಕುಗಳನ್ನು ಸೇರಿಸಿ.',
+      rateLimited: 'ಹೆಚ್ಚಿನ ವಿನಂತಿಗಳು ಬಂದಿವೆ. ದಯವಿಟ್ಟು ಸ್ವಲ್ಪ ಸಮಯ ಕಾಯಿರಿ.',
+      fileTooLarge: 'ಫೋಟೋ ಗಾತ್ರ 4 MB ಗಿಂತ ಹೆಚ್ಚಾಗಿದೆ. ದಯವಿಟ್ಟು ಚಿಕ್ಕ ಫೋಟೋ ಬಳಸಿ.',
+      genericError: 'ಬಿಲ್ ವಿವರಗಳನ್ನು ಓದಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಹಸ್ತಚಾಲಿತವಾಗಿ ಸೇರಿಸಿ.',
     },
     hi: {
       title: 'सप्लायर बिल स्कैन करें',
       subtitle: 'बिल की फोटो से सीधे स्टॉक एंट्री करें',
-      consentNotice: 'गोपनीयता सूचना: यह फोटो केवल बिल पढ़ने के लिए गूगल एआई को भेजी जाती है। आपका बिक्री डेटा हमेशा आपके फोन में ही रहता है।',
+      consentNotice: 'गोपनीयता सूचना: यह फोटो केवल बिल से टेक्स्ट निकालने के लिए गूगल जेमिनी (Google Gemini) को भेजी जाती है, और BizCopilot द्वारा स्टोर नहीं की जाती है। आपका बिक्री डेटा हमेशा आपके फोन में ही रहता है।',
       captureButton: 'बिल की फोटो खींचें',
       uploadButton: 'गैलरी से फोटो चुनें',
-      processing: 'एआई बिल का विश्लेषण कर रहा है...',
+      processing: 'जेमिनी बिल का विश्लेषण कर रहा है...',
       reviewTitle: 'बिल में दर्ज सामान की समीक्षा',
       supplier: 'सप्लायर का नाम',
       date: 'बिल दिनांक',
       addToStock: 'चुने हुए सामान को स्टॉक में जोड़ें',
       newProductNotice: '(नया सामान बनेगा)',
       manualEntry: 'हाथ से सामान जोड़ें',
+      quotaExceeded: 'गूगल जेमिनी का दैनिक एआई कोटा समाप्त हो गया है। कृपया नीचे हाथ से सामान जोड़ें।',
+      rateLimited: 'अनुरोध सीमा पार हो गई है। कृपया थोड़ी देर बाद प्रयास करें।',
+      fileTooLarge: 'फोटो 4 MB से बड़ी है। कृपया छोटी या कंप्रेस की गई फोटो चुनें।',
+      genericError: 'बिल पढ़ने में समस्या हुई। कृपया नीचे हाथ से सामान जोड़ें।'
     },
   }[lang] || {
     title: 'Scan Supplier Bill',
     subtitle: 'Photo of invoice directly to stock inventory',
-    consentNotice: 'Privacy Notice: This photo is sent to Google AI solely to read the bill lines. Your sales data and customer records never leave your device.',
+    consentNotice: 'Privacy Notice: This image is sent to Google Gemini to extract text and is not stored by BizCopilot. Your sales data and customer records never leave your device.',
     captureButton: 'Take Photo of Bill',
     uploadButton: 'Choose from Gallery',
-    processing: 'Analyzing bill with AI...',
+    processing: 'Analyzing bill with Gemini...',
     reviewTitle: 'Review Bill Line Items',
     supplier: 'Supplier',
     date: 'Bill Date',
     addToStock: 'Add Checked Items to Stock',
     newProductNotice: '(New item will be created)',
     manualEntry: 'Add Item Manually',
+    quotaExceeded: 'Daily AI scan quota reached for Google Gemini. You can enter items manually below.',
+    rateLimited: 'Rate limit reached (10 requests/min). Please wait a moment before trying again.',
+    fileTooLarge: 'Image is larger than 4 MB. Please use a smaller or compressed photo.',
+    genericError: 'Failed to extract bill items. You can add items manually below.',
   };
 
   if (!isOpen) return null;
@@ -181,9 +197,15 @@ export const BillExtractModal: React.FC<BillExtractModalProps> = ({
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setErrorMessage(
-          data.error || 'Failed to extract bill items. You can add items manually below.'
-        );
+        let errorMsg = data.error || t.genericError;
+        if (data.errorCode === 'QUOTA_EXCEEDED') {
+          errorMsg = t.quotaExceeded;
+        } else if (data.errorCode === 'RATE_LIMIT_EXCEEDED') {
+          errorMsg = t.rateLimited;
+        } else if (data.errorCode === 'FILE_TOO_LARGE' || res.status === 413) {
+          errorMsg = t.fileTooLarge;
+        }
+        setErrorMessage(errorMsg);
         // Fallback to empty review screen so user can still add items manually
         setReviewLines([
           {

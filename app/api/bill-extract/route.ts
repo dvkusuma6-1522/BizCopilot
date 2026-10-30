@@ -1,43 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import {
+  generateJson,
+  GeminiKeyMissingError,
+  GeminiQuotaExceededError,
+  isQuotaExceededError,
+  getGeminiModel,
+} from '@/lib/ai/gemini';
+import { checkRateLimit } from '@/lib/ai/rate-limit';
+
+export interface ExtractedBillItem {
+  name: string;
+  quantity: number;
+  unit?: string;
+  unitPrice?: number;
+}
 
 export interface ExtractedBillResponse {
   success: boolean;
   supplierName?: string;
   billDate?: string;
-  items?: Array<{
-    name: string;
-    quantity: number;
-    unit?: string;
-    unitPrice?: number;
-  }>;
+  items?: ExtractedBillItem[];
   error?: string;
+  errorCode?: 'RATE_LIMIT_EXCEEDED' | 'QUOTA_EXCEEDED' | 'KEY_MISSING' | 'FILE_TOO_LARGE' | 'INVALID_INPUT' | 'EXTRACTION_FAILED';
   fallback?: boolean;
 }
 
-export async function POST(req: NextRequest) {
+export const BillItemSchema = z.object({
+  name: z.string().min(1, 'Item name cannot be empty'),
+  quantity: z.number().positive().default(1),
+  unit: z.string().optional(),
+  unitPrice: z.number().nonnegative().optional(),
+});
+
+export const BillExtractResponseSchema = z.object({
+  supplierName: z.string().default(''),
+  billDate: z.string().default(''),
+  items: z.array(BillItemSchema).default([]),
+});
+
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 MB
+
+export async function POST(req: NextRequest): Promise<NextResponse<ExtractedBillResponse>> {
   try {
+    // 1. Rate Limiting (10 requests/minute per IP)
+    const rateLimit = await checkRateLimit(req, 10, 60);
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          fallback: true,
+          error: 'Rate limit reached (10 requests/min). Please wait a moment before scanning another bill.',
+          errorCode: 'RATE_LIMIT_EXCEEDED',
+        },
+        { status: 429 }
+      );
+    }
+
+    // 2. Parse request body
     const body = await req.json();
     const { imageBase64, mimeType = 'image/jpeg' } = body || {};
 
     if (!imageBase64 || typeof imageBase64 !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'No image provided' },
+        {
+          success: false,
+          fallback: true,
+          error: 'No image provided for bill extraction.',
+          errorCode: 'INVALID_INPUT',
+        },
         { status: 400 }
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({
-        success: false,
-        fallback: true,
-        error: 'AI Bill Scanner is offline or API key is not configured. You can enter items manually.',
-      });
+    // 3. Clean base64 string and validate max 4 MB size
+    const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '').trim();
+    const estimatedSizeBytes = Math.ceil((cleanBase64.length * 3) / 4);
+
+    if (estimatedSizeBytes > MAX_IMAGE_BYTES) {
+      return NextResponse.json(
+        {
+          success: false,
+          fallback: true,
+          error: `Bill image size (~${(estimatedSizeBytes / (1024 * 1024)).toFixed(1)} MB) exceeds 4 MB limit. Please compress or crop the photo.`,
+          errorCode: 'FILE_TOO_LARGE',
+        },
+        { status: 413 }
+      );
     }
 
-    // Clean base64 string if data URL prefix was included
-    const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '').trim();
-
+    // 4. Construct prompt and parts (Never log base64 data)
     const promptText = `Analyze this supplier invoice / retail bill image.
 Extract the following information in strict, valid JSON format:
 {
@@ -54,98 +106,64 @@ Extract the following information in strict, valid JSON format:
 }
 
 CRITICAL RULES:
-1. Return ONLY the raw JSON object. Do not wrap in markdown code blocks like \`\`\`json.
-2. If any quantity cannot be determined, default to 1.
+1. Return ONLY the requested JSON schema.
+2. If any item quantity cannot be clearly read, default to 1.
 3. Keep product names concise as written on the bill.
-4. Do not invent items; only transcribe what is visible.`;
+4. Do not invent items or hallucinate; only transcribe what is visible on the bill.`;
 
-    const modelName = 'gemini-1.5-flash';
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+    const contents = [
+      promptText,
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                { text: promptText },
-                {
-                  inlineData: {
-                    mimeType: mimeType || 'image/jpeg',
-                    data: cleanBase64,
-                  },
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 1500,
-          },
-        }),
-      }
-    );
+        inlineData: {
+          mimeType: mimeType || 'image/jpeg',
+          data: cleanBase64,
+        },
+      },
+    ];
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error('Gemini Bill Extract Error:', errText);
+    const extracted = await generateJson(contents, BillExtractResponseSchema, {
+      model: getGeminiModel(),
+      temperature: 0.1,
+      timeoutMs: 30000,
+    });
+
+    return NextResponse.json({
+      success: true,
+      supplierName: extracted.supplierName || '',
+      billDate: extracted.billDate || '',
+      items: extracted.items,
+    });
+  } catch (err: unknown) {
+    if (err instanceof GeminiKeyMissingError) {
       return NextResponse.json({
         success: false,
         fallback: true,
-        error: 'Could not process the bill image. Please try again or enter items manually.',
+        error: 'Gemini API key is not configured. You can enter items manually.',
+        errorCode: 'KEY_MISSING',
       });
     }
 
-    const data = await geminiRes.json();
-    const rawAiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    // Strip markdown formatting if returned
-    const cleanedJson = rawAiText
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/\s*```$/i, '')
-      .trim();
-
-    if (!cleanedJson) {
-      return NextResponse.json({
-        success: false,
-        fallback: true,
-        error: 'No text could be extracted from this image.',
-      });
+    if (isQuotaExceededError(err) || err instanceof GeminiQuotaExceededError) {
+      return NextResponse.json(
+        {
+          success: false,
+          fallback: true,
+          error: 'Daily AI scan quota reached for Google Gemini. You can enter items manually.',
+          errorCode: 'QUOTA_EXCEEDED',
+        },
+        { status: 429 }
+      );
     }
 
-    try {
-      const parsed = JSON.parse(cleanedJson);
-      const items = Array.isArray(parsed.items)
-        ? parsed.items.map((it: { name?: string; quantity?: unknown; unit?: string; unitPrice?: unknown }) => ({
-            name: String(it.name || '').trim(),
-            quantity: Number(it.quantity) > 0 ? Number(it.quantity) : 1,
-            unit: it.unit ? String(it.unit) : undefined,
-            unitPrice: it.unitPrice ? Number(it.unitPrice) : undefined,
-          })).filter((it: { name: string }) => it.name.length > 0)
-        : [];
+    const errorMsg = err instanceof Error ? err.message : 'Unknown extraction error';
+    // Log metadata only - never log prompt or image data
+    console.error('Bill extract error code:', errorMsg);
 
-      return NextResponse.json({
-        success: true,
-        supplierName: parsed.supplierName || '',
-        billDate: parsed.billDate || '',
-        items,
-      });
-    } catch (parseErr) {
-      console.error('Failed to parse Gemini response as JSON:', rawAiText, parseErr);
-      return NextResponse.json({
-        success: false,
-        fallback: true,
-        error: 'Could not format bill items. Please enter manually.',
-      });
-    }
-  } catch (error) {
-    console.error('Bill extract route error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error processing bill' },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: false,
+      fallback: true,
+      error: 'Could not extract bill items automatically. Please enter items manually.',
+      errorCode: 'EXTRACTION_FAILED',
+    });
   }
 }
