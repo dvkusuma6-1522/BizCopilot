@@ -14,6 +14,7 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     supplierLeadDays: 2,
     unitCost: 7.5,
     retailPrice: 10,
+    barcode: "8901030383456",
   },
   {
     productId: "P002",
@@ -24,6 +25,7 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     supplierLeadDays: 5,
     unitCost: 135,
     retailPrice: 165,
+    barcode: "8901058852415",
   },
   {
     productId: "P003",
@@ -34,6 +36,7 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     supplierLeadDays: 3,
     unitCost: 360,
     retailPrice: 450,
+    barcode: "8901725181223",
   },
   {
     productId: "P004",
@@ -44,6 +47,7 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     supplierLeadDays: 3,
     unitCost: 340,
     retailPrice: 420,
+    barcode: "8901262010014",
   },
   {
     productId: "P005",
@@ -54,6 +58,7 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     supplierLeadDays: 1,
     unitCost: 26,
     retailPrice: 32,
+    barcode: "8901063141221",
   },
   {
     productId: "P006",
@@ -64,6 +69,7 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     supplierLeadDays: 2,
     unitCost: 11,
     retailPrice: 15,
+    barcode: "8901058852422",
   },
   {
     productId: "P007",
@@ -74,6 +80,7 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     supplierLeadDays: 4,
     unitCost: 25,
     retailPrice: 35,
+    barcode: "8901491101824",
   },
   {
     productId: "P008",
@@ -84,6 +91,7 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     supplierLeadDays: 3,
     unitCost: 39,
     retailPrice: 48,
+    barcode: "8901233024018",
   },
   {
     productId: "P009",
@@ -94,6 +102,7 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     supplierLeadDays: 4,
     unitCost: 105,
     retailPrice: 140,
+    barcode: "8901030012219",
   },
   {
     productId: "P010",
@@ -104,6 +113,7 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     supplierLeadDays: 2,
     unitCost: 12,
     retailPrice: 20,
+    barcode: "8901725181001",
   },
   {
     productId: "P011",
@@ -114,6 +124,7 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     supplierLeadDays: 3,
     unitCost: 140,
     retailPrice: 175,
+    barcode: "8906014410052",
   },
   {
     productId: "P012",
@@ -124,6 +135,7 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     supplierLeadDays: 3,
     unitCost: 18,
     retailPrice: 25,
+    barcode: "8901030044012",
   },
 ];
 

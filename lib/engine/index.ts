@@ -403,3 +403,9 @@ export function detectDemandAnomalies(
     };
   });
 }
+
+// 11. CATEGORY EXTENSIONS
+export * from './category-engine';
+export * from './festivals';
+export * from './digest';
+

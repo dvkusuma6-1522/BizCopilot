@@ -4,9 +4,10 @@ import {
   INITIAL_INVENTORY,
   INITIAL_SALES_RECORDS,
   STORE_NAME,
-  STORE_TYPE,
-  STORE_LOCATION,
 } from './demo-data';
+import { BusinessCategoryId, BusinessProfile } from './categories/types';
+import { getCategory, DEFAULT_CATEGORY_ID } from './categories/registry';
+import { SupportedLanguage } from './i18n';
 
 export interface DBStore {
   id?: number;
@@ -38,8 +39,10 @@ export interface DBProduct {
   supplierLeadDays: number;
   unitCost: number;
   retailPrice: number;
+  barcode?: string;
   supplierName?: string;
   supplierPhone?: string;
+  attributes?: Record<string, unknown>;
 }
 
 export interface DBSupplier {
@@ -80,6 +83,15 @@ export interface DBSetting {
   value: string; // JSON encoded or string
 }
 
+export interface DBBusinessProfile {
+  id?: number;
+  categoryId: BusinessCategoryId;
+  businessName: string;
+  city: string;
+  language: SupportedLanguage;
+  createdAt: string;
+}
+
 export class BizCopilotDB extends Dexie {
   stores!: Table<DBStore, number>;
   sales!: Table<DBSalesRecord, number>;
@@ -88,6 +100,7 @@ export class BizCopilotDB extends Dexie {
   supplierPrices!: Table<DBSupplierPrice, number>;
   actions!: Table<DBAction, number>;
   settings!: Table<DBSetting, string>;
+  businessProfile!: Table<DBBusinessProfile, number>;
 
   constructor() {
     super('BizCopilotDB');
@@ -100,12 +113,20 @@ export class BizCopilotDB extends Dexie {
       actions: '++id, storeId, productId, status, type',
       settings: 'key',
     });
+
+    this.version(2).stores({
+      businessProfile: '++id, categoryId, businessName, city',
+    });
+
+    this.version(3).stores({
+      products: '++id, storeId, productId, category, barcode',
+    });
   }
 }
 
 export const db = new BizCopilotDB();
 
-// Default demo suppliers mapped to products
+// Default demo suppliers
 export const DEFAULT_SUPPLIERS = [
   {
     name: 'Karnataka Agro Oils & Grains',
@@ -128,15 +149,201 @@ export const DEFAULT_SUPPLIERS = [
 ];
 
 /**
+ * Get active business profile; defaults to Kirana if not yet configured
+ */
+export async function getBusinessProfile(): Promise<BusinessProfile> {
+  if (typeof window === 'undefined') {
+    return {
+      categoryId: DEFAULT_CATEGORY_ID,
+      businessName: STORE_NAME,
+      city: 'Bengaluru',
+      language: 'en',
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  try {
+    const profile = await db.businessProfile.toCollection().first();
+    if (profile) {
+      return {
+        id: profile.id,
+        categoryId: profile.categoryId || DEFAULT_CATEGORY_ID,
+        businessName: profile.businessName || STORE_NAME,
+        city: profile.city || 'Bengaluru',
+        language: profile.language || 'en',
+        createdAt: profile.createdAt || new Date().toISOString(),
+      };
+    }
+  } catch (err) {
+    console.warn('Failed to fetch businessProfile from Dexie:', err);
+  }
+
+  return {
+    categoryId: DEFAULT_CATEGORY_ID,
+    businessName: STORE_NAME,
+    city: 'Bengaluru',
+    language: 'en',
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Save or update business profile
+ */
+export async function saveBusinessProfile(
+  profile: Partial<BusinessProfile>
+): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const existing = await db.businessProfile.toCollection().first();
+    if (existing && existing.id) {
+      await db.businessProfile.update(existing.id, {
+        categoryId: profile.categoryId || existing.categoryId,
+        businessName: profile.businessName || existing.businessName,
+        city: profile.city || existing.city,
+        language: profile.language || existing.language,
+      });
+    } else {
+      await db.businessProfile.add({
+        categoryId: profile.categoryId || DEFAULT_CATEGORY_ID,
+        businessName: profile.businessName || STORE_NAME,
+        city: profile.city || 'Bengaluru',
+        language: profile.language || 'en',
+        createdAt: new Date().toISOString(),
+      });
+    }
+  } catch (err) {
+    console.error('Failed to save businessProfile to Dexie:', err);
+  }
+}
+
+/**
+ * Seed category-specific demo dataset into Dexie
+ */
+export async function seedCategoryDemoData(
+  categoryId: BusinessCategoryId = DEFAULT_CATEGORY_ID
+): Promise<{
+  store: { name: string; type: string; location: string };
+  sales: SalesRecord[];
+  inventory: InventoryItem[];
+}> {
+  const cat = getCategory(categoryId);
+  const demo = cat.demoDataset();
+
+  if (typeof window === 'undefined') {
+    return {
+      store: demo.store,
+      sales: demo.sales,
+      inventory: demo.products,
+    };
+  }
+
+  try {
+    // Clear existing store tables
+    await db.sales.clear();
+    await db.products.clear();
+    await db.actions.clear();
+    await db.stores.clear();
+
+    // Add store record
+    const storeId = await db.stores.add({
+      name: demo.store.name,
+      type: demo.store.type,
+      location: demo.store.location,
+      isDefault: true,
+    });
+
+    // Bulk add products
+    const dbProducts: DBProduct[] = demo.products.map((p) => ({
+      storeId,
+      productId: p.productId,
+      productName: p.productName,
+      category: p.category,
+      stockOnHand: p.stockOnHand,
+      reorderLevel: p.reorderLevel,
+      supplierLeadDays: p.supplierLeadDays,
+      unitCost: p.unitCost,
+      retailPrice: p.retailPrice,
+      barcode: p.barcode,
+      attributes: p.attributes || {},
+      supplierName: `${cat.labels.en} Wholesaler`,
+      supplierPhone: '+919845012345',
+    }));
+    await db.products.bulkAdd(dbProducts);
+
+    // Bulk add sales
+    const dbSales: DBSalesRecord[] = demo.sales.map((s) => ({
+      storeId,
+      date: s.date,
+      productId: s.productId,
+      productName: s.productName,
+      category: s.category,
+      unitsSold: s.unitsSold,
+      unitPrice: s.unitPrice,
+    }));
+    await db.sales.bulkAdd(dbSales);
+
+    // Add initial category actions
+    const initialActions: DBAction[] = [];
+    const stockoutCandidates = demo.products.filter(
+      (p) => p.stockOnHand <= (p.reorderLevel || 10)
+    );
+    if (stockoutCandidates.length > 0) {
+      const p = stockoutCandidates[0];
+      initialActions.push({
+        storeId,
+        type: 'reorder',
+        productId: p.productId,
+        productName: p.productName,
+        description: `${p.productName} is approaching critical stock levels before next delivery.`,
+        suggestedAction: `Order fresh replenishment batch today.`,
+        impactValue: Math.round(p.reorderLevel * p.retailPrice),
+        status: 'suggested',
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    if (initialActions.length > 0) {
+      await db.actions.bulkAdd(initialActions);
+    }
+
+    // Update business profile category
+    await saveBusinessProfile({ categoryId, businessName: demo.store.name, city: 'Bengaluru' });
+
+    return {
+      store: demo.store,
+      sales: demo.sales,
+      inventory: demo.products,
+    };
+  } catch (err) {
+    console.error(`Failed to seed demo data for category ${categoryId}:`, err);
+    return {
+      store: demo.store,
+      sales: demo.sales,
+      inventory: demo.products,
+    };
+  }
+}
+
+/**
  * Initialize Dexie DB with default FreshMart data if empty
  */
 export async function initDatabase(): Promise<{
   storeId: number;
   sales: SalesRecord[];
   inventory: InventoryItem[];
+  profile: BusinessProfile;
 }> {
+  const profile = await getBusinessProfile();
+
   if (typeof window === 'undefined') {
-    return { storeId: 1, sales: INITIAL_SALES_RECORDS, inventory: INITIAL_INVENTORY };
+    return {
+      storeId: 1,
+      sales: INITIAL_SALES_RECORDS,
+      inventory: INITIAL_INVENTORY,
+      profile,
+    };
   }
 
   try {
@@ -144,18 +351,13 @@ export async function initDatabase(): Promise<{
     let defaultStore: DBStore | undefined;
 
     if (storeCount === 0) {
-      // Seed initial store
-      const storeId = await db.stores.add({
-        name: STORE_NAME,
-        type: STORE_TYPE,
-        location: STORE_LOCATION,
-        isDefault: true,
-      });
+      // Seed initial category demo data
+      const demoRes = await seedCategoryDemoData(profile.categoryId || DEFAULT_CATEGORY_ID);
 
-      // Seed suppliers
+      // Seed default suppliers
       for (const sup of DEFAULT_SUPPLIERS) {
         await db.suppliers.add({
-          storeId,
+          storeId: 1,
           name: sup.name,
           phone: sup.phone,
           leadDays: sup.leadDays,
@@ -163,86 +365,9 @@ export async function initDatabase(): Promise<{
         });
       }
 
-      // Seed products
-      const dbProducts: DBProduct[] = INITIAL_INVENTORY.map((inv) => {
-        let supName = 'Bangalore FMCG Wholesalers';
-        let supPhone = '+919886098765';
-        if (inv.category === 'Cooking Essentials') {
-          supName = 'Karnataka Agro Oils & Grains';
-          supPhone = '+919845012345';
-        } else if (inv.category === 'Snacks & Beverages') {
-          supName = 'South India Snacks & Spices Depot';
-          supPhone = '+919900112233';
-        }
-
-        return {
-          storeId,
-          productId: inv.productId,
-          productName: inv.productName,
-          category: inv.category,
-          stockOnHand: inv.stockOnHand,
-          reorderLevel: inv.reorderLevel,
-          supplierLeadDays: inv.supplierLeadDays,
-          unitCost: inv.unitCost,
-          retailPrice: inv.retailPrice,
-          supplierName: supName,
-          supplierPhone: supPhone,
-        };
-      });
-      await db.products.bulkAdd(dbProducts);
-
-      // Seed sales
-      const dbSales: DBSalesRecord[] = INITIAL_SALES_RECORDS.map((s) => ({
-        storeId,
-        date: s.date,
-        productId: s.productId,
-        productName: s.productName,
-        category: s.category,
-        unitsSold: s.unitsSold,
-        unitPrice: s.unitPrice,
-      }));
-      await db.sales.bulkAdd(dbSales);
-
-      // Seed default actions
-      await db.actions.bulkAdd([
-        {
-          storeId,
-          type: 'reorder',
-          productId: 'GROC-OIL-001',
-          productName: 'Sunflower Cooking Oil 1L',
-          description: 'Stock may run out in ~2.6 days before next delivery (takes 5 days).',
-          suggestedAction: 'Order 36 units now to avoid empty shelves.',
-          impactValue: 36 * 145, // Rs 5,220 saved
-          status: 'suggested',
-          createdAt: new Date().toISOString(),
-        },
-        {
-          storeId,
-          type: 'discount_dead_stock',
-          productId: 'SNK-CHIP-001',
-          productName: 'Spiced Potato Chips 100g',
-          description: '180 units sitting idle for 30+ days tying up Rs 4,500.',
-          suggestedAction: 'Run 25% discount bundle to clear stock & recover cash.',
-          impactValue: 4500, // Rs 4,500 cash unlocked
-          status: 'suggested',
-          createdAt: new Date().toISOString(),
-        },
-        {
-          storeId,
-          type: 'investigate_drop',
-          productId: 'BSK-PARLE-001',
-          productName: 'Parle-G Biscuits 250g',
-          description: 'Sales dropped -40.7% from 643 to 381 units.',
-          suggestedAction: 'Check shelf placement or competition nearby.',
-          impactValue: (643 - 381) * 25, // Rs 6,550 revenue gap
-          status: 'suggested',
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-
-      // Seed initial settings
+      // Seed settings
       await db.settings.bulkAdd([
-        { key: 'language', value: 'en' },
+        { key: 'language', value: profile.language || 'en' },
         { key: 'mode', value: 'owner' },
         { key: 'leadBufferDays', value: '7' },
         { key: 'onboardingComplete', value: 'false' },
@@ -250,9 +375,10 @@ export async function initDatabase(): Promise<{
       ]);
 
       return {
-        storeId,
-        sales: INITIAL_SALES_RECORDS,
-        inventory: INITIAL_INVENTORY,
+        storeId: 1,
+        sales: demoRes.sales,
+        inventory: demoRes.inventory,
+        profile,
       };
     } else {
       defaultStore = await db.stores.filter((s) => s.isDefault).first();
@@ -279,43 +405,44 @@ export async function initDatabase(): Promise<{
         supplierLeadDays: p.supplierLeadDays,
         unitCost: p.unitCost,
         retailPrice: p.retailPrice,
+        barcode: p.barcode,
+        attributes: p.attributes || {},
       }));
 
       return {
         storeId: currentStoreId,
         sales: sales.length > 0 ? sales : INITIAL_SALES_RECORDS,
         inventory: inventory.length > 0 ? inventory : INITIAL_INVENTORY,
+        profile,
       };
     }
   } catch (err) {
-    console.error('Dexie DB initialization failed, falling back to in-memory demo data:', err);
-    return { storeId: 1, sales: INITIAL_SALES_RECORDS, inventory: INITIAL_INVENTORY };
+    console.error('Dexie DB initialization failed:', err);
+    return {
+      storeId: 1,
+      sales: INITIAL_SALES_RECORDS,
+      inventory: INITIAL_INVENTORY,
+      profile,
+    };
   }
 }
 
 /**
- * Reset Dexie database to FreshMart Grocery default demo
+ * Reset Dexie database to current category's default demo
  */
-export async function resetDatabaseToDemo(): Promise<{
+export async function resetDatabaseToDemo(
+  categoryId?: BusinessCategoryId
+): Promise<{
   sales: SalesRecord[];
   inventory: InventoryItem[];
 }> {
-  if (typeof window === 'undefined') {
-    return { sales: INITIAL_SALES_RECORDS, inventory: INITIAL_INVENTORY };
-  }
-
-  try {
-    await db.sales.clear();
-    await db.products.clear();
-    await db.actions.clear();
-    await db.stores.clear();
-    await db.suppliers.clear();
-    await db.settings.clear();
-    return await initDatabase();
-  } catch (err) {
-    console.error('Failed to reset Dexie database:', err);
-    return { sales: INITIAL_SALES_RECORDS, inventory: INITIAL_INVENTORY };
-  }
+  const profile = await getBusinessProfile();
+  const targetCategory = categoryId || profile.categoryId || DEFAULT_CATEGORY_ID;
+  const res = await seedCategoryDemoData(targetCategory);
+  return {
+    sales: res.sales,
+    inventory: res.inventory,
+  };
 }
 
 /**
@@ -358,6 +485,7 @@ export async function saveImportedDataToDb(
       supplierLeadDays: Number(inv.supplierLeadDays) || 3,
       unitCost: Number(inv.unitCost) || Math.round(inv.retailPrice * 0.7),
       retailPrice: Number(inv.retailPrice) || 0,
+      attributes: inv.attributes || {},
     }));
     await db.products.bulkAdd(dbProducts);
   } catch (err) {
@@ -426,3 +554,170 @@ export async function setDbSetting(key: string, value: string): Promise<void> {
     console.error(`Failed to set setting ${key}:`, e);
   }
 }
+
+/**
+ * Fast Entry & Stock Operations
+ */
+export interface QuickSaleLine {
+  productId: string;
+  quantity: number;
+  unitPrice?: number;
+}
+
+export interface QuickSaleResult {
+  saleIds: number[];
+  adjustments: { productId: string; productName: string; quantity: number }[];
+  totalAmount: number;
+}
+
+export async function recordQuickSale(
+  lines: QuickSaleLine[],
+  dateStr?: string,
+  storeId = 1
+): Promise<QuickSaleResult> {
+  const date = dateStr || new Date().toISOString().split('T')[0];
+  const saleIds: number[] = [];
+  const adjustments: { productId: string; productName: string; quantity: number }[] = [];
+  let totalAmount = 0;
+
+  if (typeof window === 'undefined') {
+    return { saleIds: [1], adjustments: [], totalAmount: 0 };
+  }
+
+  await db.transaction('rw', db.sales, db.products, async () => {
+    for (const line of lines) {
+      if (!line.quantity || line.quantity <= 0) continue;
+      const product = await db.products
+        .where('storeId')
+        .equals(storeId)
+        .filter((p) => p.productId === line.productId)
+        .first();
+
+      if (!product) continue;
+
+      const price = line.unitPrice ?? product.retailPrice ?? 0;
+      const amount = price * line.quantity;
+      totalAmount += amount;
+
+      // Decrement stockOnHand (prevent negative stock)
+      const newStock = Math.max(0, (product.stockOnHand || 0) - line.quantity);
+      if (product.id) {
+        await db.products.update(product.id, { stockOnHand: newStock });
+      }
+
+      // Add sales record
+      const id = await db.sales.add({
+        storeId,
+        date,
+        productId: product.productId,
+        productName: product.productName,
+        category: product.category,
+        unitsSold: line.quantity,
+        unitPrice: price,
+      });
+
+      saleIds.push(id);
+      adjustments.push({
+        productId: product.productId,
+        productName: product.productName,
+        quantity: line.quantity,
+      });
+    }
+  });
+
+  return { saleIds, adjustments, totalAmount };
+}
+
+export async function undoQuickSale(
+  saleIds: number[],
+  adjustments: { productId: string; quantity: number }[],
+  storeId = 1
+): Promise<void> {
+  if (typeof window === 'undefined') return;
+  await db.transaction('rw', db.sales, db.products, async () => {
+    for (const id of saleIds) {
+      await db.sales.delete(id);
+    }
+    for (const adj of adjustments) {
+      const product = await db.products
+        .where('storeId')
+        .equals(storeId)
+        .filter((p) => p.productId === adj.productId)
+        .first();
+      if (product && product.id) {
+        await db.products.update(product.id, {
+          stockOnHand: (product.stockOnHand || 0) + adj.quantity,
+        });
+      }
+    }
+  });
+}
+
+export async function recordStockIn(
+  items: { productId: string; quantity: number; unitCost?: number }[],
+  storeId = 1
+): Promise<void> {
+  if (typeof window === 'undefined') return;
+  await db.transaction('rw', db.products, async () => {
+    for (const item of items) {
+      if (item.quantity <= 0) continue;
+      const product = await db.products
+        .where('storeId')
+        .equals(storeId)
+        .filter((p) => p.productId === item.productId)
+        .first();
+      if (product && product.id) {
+        const patch: Partial<DBProduct> = {
+          stockOnHand: (product.stockOnHand || 0) + item.quantity,
+        };
+        if (item.unitCost !== undefined && item.unitCost > 0) {
+          patch.unitCost = item.unitCost;
+        }
+        await db.products.update(product.id, patch);
+      }
+    }
+  });
+}
+
+export async function findProductByBarcode(
+  barcode: string,
+  storeId = 1
+): Promise<DBProduct | undefined> {
+  if (typeof window === 'undefined') return undefined;
+  const clean = barcode.trim();
+  const product = await db.products
+    .where('storeId')
+    .equals(storeId)
+    .filter((p) => p.barcode === clean)
+    .first();
+  return product;
+}
+
+export async function clearDemoData(storeId = 1): Promise<void> {
+  if (typeof window === 'undefined') return;
+  await db.transaction('rw', db.sales, db.products, db.actions, db.settings, async () => {
+    await db.sales.where('storeId').equals(storeId).delete();
+    await db.products.where('storeId').equals(storeId).delete();
+    await db.actions.where('storeId').equals(storeId).delete();
+    await db.settings.put({ key: 'isDemoData', value: 'false' });
+  });
+}
+
+export async function isDemoDataActive(): Promise<boolean> {
+  const val = await getDbSetting('isDemoData', 'true');
+  return val === 'true';
+}
+
+export async function setDemoDataActive(active: boolean): Promise<void> {
+  await setDbSetting('isDemoData', active ? 'true' : 'false');
+}
+
+export async function getTourSeen(): Promise<boolean> {
+  const val = await getDbSetting('tourSeen', 'false');
+  return val === 'true';
+}
+
+export async function setTourSeen(seen = true): Promise<void> {
+  await setDbSetting('tourSeen', seen ? 'true' : 'false');
+}
+

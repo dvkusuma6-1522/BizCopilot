@@ -21,12 +21,15 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { SupportedLanguage } from '@/lib/i18n';
+import { CategoryConfig } from '@/lib/categories/types';
 
 interface CopilotChatProps {
   summary: PeriodSummary;
   inventory: CalculatedInventoryItem[];
   productPerformance: ProductPerformance[];
   lang?: SupportedLanguage;
+  category?: CategoryConfig;
+  storeName?: string;
 }
 
 export const CopilotChat: React.FC<CopilotChatProps> = ({
@@ -34,6 +37,8 @@ export const CopilotChat: React.FC<CopilotChatProps> = ({
   inventory,
   productPerformance,
   lang = 'en',
+  category,
+  storeName = 'FreshMart Grocery',
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
@@ -41,10 +46,10 @@ export const CopilotChat: React.FC<CopilotChatProps> = ({
       sender: 'assistant',
       text:
         lang === 'kn'
-          ? `ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ **BizCopilot AI ವ್ಯಾಪಾರ ಸಲಹೆಗಾರ**.\n\nನಿಮ್ಮ ದಿನನಿತ್ಯದ ಅಂಗಡಿ ಮಾರಾಟ, ದಾಸ್ತಾನು ಕೊರತೆಯ ಅಪಾಯಗಳು ಮತ್ತು ಮಾರಾಟವಾಗದ ವಸ್ತುಗಳ ಬಗ್ಗೆ ನೇರವಾಗಿ ಪರಿಶೀಲಿಸುತ್ತೇನೆ.\n\nಕೆಳಗಿನ ಪ್ರಶ್ನೆಗಳನ್ನು ಕ್ಲಿಕ್ ಮಾಡಿ ಅಥವಾ ನಿಮ್ಮ ಪ್ರಶ್ನೆಯನ್ನು ಕೇಳಿ.`
+          ? `ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ **BizCopilot AI ವ್ಯಾಪಾರ ಸಲಹೆಗಾರ** (${category ? category.labels.kn : 'ಅಂಗಡಿ'}).\n\nನಿಮ್ಮ ದಿನನಿತ್ಯದ ಅಂಗಡಿ ಮಾರಾಟ, ದಾಸ್ತಾನು ಕೊರತೆಯ ಅಪಾಯಗಳು ಮತ್ತು ಮಾರಾಟವಾಗದ ವಸ್ತುಗಳ ಬಗ್ಗೆ ನೇರವಾಗಿ ಪರಿಶೀಲಿಸುತ್ತೇನೆ.\n\nಕೆಳಗಿನ ಪ್ರಶ್ನೆಗಳನ್ನು ಕ್ಲಿಕ್ ಮಾಡಿ ಅಥವಾ ನಿಮ್ಮ ಪ್ರಶ್ನೆಯನ್ನು ಕೇಳಿ.`
           : lang === 'hi'
-          ? `नमस्ते! मैं आपका **BizCopilot AI व्यापार सलाहकार** हूं।\n\nमैं आपकी दुकान की दैनिक बिक्री, स्टॉक खत्म होने के खतरे और रुके हुए माल की रीयल-टाइम निगरानी करता हूं।\n\nनीचे दिए गए सुझावों पर क्लिक करें या अपना सवाल पूछें।`
-          : `Hello! I am your **BizCopilot Intelligence Advisor** for FreshMart Grocery.\n\nI monitor your daily store revenue, velocity shifts, stockout threats, and dead stock exposure in real time.\n\nAsk me questions below or click one of the suggested prompts to see live answers calculated from your active store dataset.`,
+          ? `नमस्ते! मैं आपका **BizCopilot AI व्यापार सलाहकार** हूं (${category ? category.labels.hi : 'दुकान'})।\n\nमैं आपकी दुकान की दैनिक बिक्री, स्टॉक खत्म होने के खतरे और रुके हुए माल की रीयल-टाइम निगरानी करता हूं।\n\nनीचे दिए गए सुझावों पर क्लिक करें या अपना सवाल पूछें।`
+          : `Hello! I am your **BizCopilot Intelligence Advisor** for ${storeName} (${category ? category.labels.en : 'Store'}).\n\nI monitor your daily store revenue, velocity shifts, stockout threats, and dead stock exposure in real time.\n\nAsk me questions below or click one of the suggested prompts to see live answers calculated from your active store dataset.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       suggestedFollowUps:
         lang === 'kn'
@@ -206,6 +211,7 @@ export const CopilotChat: React.FC<CopilotChatProps> = ({
           totalRevenue: summary.totalRevenue,
           revenueChangePct: summary.revenueChangePct,
           totalUnitsSold: summary.totalUnitsSold,
+          categoryId: category?.id,
         }),
       });
 

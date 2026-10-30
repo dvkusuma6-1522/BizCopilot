@@ -153,7 +153,6 @@ export function normalizeColumnHeader(header: string): string {
       'sellingprice',
       'rate',
       'saleprice',
-      'mrp',
       'saleamount',
       'ಬೆಲೆ',
       'मूल्य',
@@ -241,6 +240,77 @@ export function normalizeColumnHeader(header: string): string {
     return 'supplierName';
   }
 
+  // Batch No
+  if (['batchno', 'batch', 'lot', 'lotno', 'batchnumber', 'ಬ್ಯಾಚ್', 'बैच'].includes(clean)) {
+    return 'batchNo';
+  }
+
+  // Expiry Date
+  if (
+    [
+      'expirydate',
+      'expiry',
+      'expdate',
+      'bestbefore',
+      'useby',
+      'exp',
+      'ಮುಕ್ತಾಯದಿನಾಂಕ',
+      'एक्सपायरी',
+    ].includes(clean)
+  ) {
+    return 'expiryDate';
+  }
+
+  // Size / Color / Variant Matrix
+  if (['sizecolormatrix', 'size', 'variant', 'color', 'sizecolor', 'ಗಾತ್ರ', 'साइज़'].includes(clean)) {
+    return 'sizeColorMatrix';
+  }
+
+  // Shelf Life Days
+  if (['shelflifedays', 'shelflife', 'freshnessdays', 'shelfdays'].includes(clean)) {
+    return 'shelfLifeDays';
+  }
+
+  // MRP
+  if (['mrp', 'maxretailprice', 'mrpprice', 'ಗರಿಷ್ಠಬೆಲೆ', 'अधिकतममूल्य'].includes(clean)) {
+    return 'mrp';
+  }
+
+  // Unit Type / UOM
+  if (['unittype', 'uom', 'measureunit', 'unit'].includes(clean)) {
+    return 'unitType';
+  }
+
+  // Brand
+  if (['brand', 'make', 'company', 'brandname', 'ಬ್ರ್ಯಾಂಡ್', 'ब्रांड'].includes(clean)) {
+    return 'brand';
+  }
+
+  // Warranty Months
+  if (['warrantymonths', 'warranty', 'guarantee', 'warrantyduration'].includes(clean)) {
+    return 'warrantyMonths';
+  }
+
+  // Case Size / Pack Size
+  if (['casesize', 'packsize', 'cartonsize', 'packqty'].includes(clean)) {
+    return 'caseSize';
+  }
+
+  // Minimum Order Quantity
+  if (['moq', 'minorderqty', 'minimumorderquantity'].includes(clean)) {
+    return 'moq';
+  }
+
+  // Credit Days
+  if (['creditdays', 'creditperiod', 'paymentterms'].includes(clean)) {
+    return 'creditDays';
+  }
+
+  // Item Stage
+  if (['itemstage', 'stage', 'materialstage'].includes(clean)) {
+    return 'itemStage';
+  }
+
   return clean;
 }
 
@@ -277,10 +347,10 @@ export function processRawRows(
 
   const normalizedKeys = Object.values(mappedHeaders);
 
-  // Check required keys: date, unitsSold, unitPrice
+  // Check required keys: date, unitsSold, unitPrice (or mrp)
   const hasDate = normalizedKeys.includes('date');
   const hasUnitsSold = normalizedKeys.includes('unitsSold');
-  const hasUnitPrice = normalizedKeys.includes('unitPrice');
+  const hasUnitPrice = normalizedKeys.includes('unitPrice') || normalizedKeys.includes('mrp');
   const hasProductId = normalizedKeys.includes('productId') || normalizedKeys.includes('productName');
 
   if (!hasDate || !hasUnitsSold || !hasUnitPrice || !hasProductId) {
@@ -359,9 +429,10 @@ export function processRawRows(
       continue;
     }
 
-    const unitPrice = Number(row['unitPrice']);
+    const rawUnitPrice = row['unitPrice'] !== undefined && row['unitPrice'] !== '' ? row['unitPrice'] : row['mrp'];
+    const unitPrice = Number(rawUnitPrice);
     if (isNaN(unitPrice) || unitPrice < 0) {
-      errors.push(`Row ${rowIdx}: Invalid unit price value '${row['unitPrice']}'`);
+      errors.push(`Row ${rowIdx}: Invalid unit price value '${rawUnitPrice}'`);
       continue;
     }
 
@@ -374,6 +445,30 @@ export function processRawRows(
       unitPrice,
     });
 
+    // Extract dynamic category attributes
+    const attrKeys = [
+      'batchNo',
+      'expiryDate',
+      'sizeColorMatrix',
+      'shelfLifeDays',
+      'mrp',
+      'unitType',
+      'brand',
+      'warrantyMonths',
+      'caseSize',
+      'moq',
+      'creditDays',
+      'itemStage',
+      'storageType',
+      'scheduleDrug',
+    ];
+    const attributes: Record<string, unknown> = {};
+    for (const k of attrKeys) {
+      if (row[k] !== undefined && row[k] !== '') {
+        attributes[k] = row[k];
+      }
+    }
+
     // Populate inventory if present
     if (row['stockOnHand'] !== undefined && row['stockOnHand'] !== '') {
       const stockOnHand = Number(row['stockOnHand']);
@@ -382,6 +477,12 @@ export function processRawRows(
       const unitCost = Number(row['unitCost'] || unitPrice * 0.7);
 
       if (!isNaN(stockOnHand) && stockOnHand >= 0) {
+        const existing = inventoryMap.get(productId);
+        const mergedAttrs =
+          Object.keys(attributes).length > 0
+            ? { ...(existing?.attributes || {}), ...attributes }
+            : existing?.attributes;
+
         inventoryMap.set(productId, {
           productId,
           productName,
@@ -391,8 +492,15 @@ export function processRawRows(
           supplierLeadDays: isNaN(supplierLeadDays) ? 3 : supplierLeadDays,
           unitCost: isNaN(unitCost) ? Math.round(unitPrice * 0.7) : unitCost,
           retailPrice: unitPrice,
+          attributes: mergedAttrs,
         });
       }
+    } else if (Object.keys(attributes).length > 0 && inventoryMap.has(productId)) {
+      const existing = inventoryMap.get(productId)!;
+      inventoryMap.set(productId, {
+        ...existing,
+        attributes: { ...(existing.attributes || {}), ...attributes },
+      });
     }
   }
 

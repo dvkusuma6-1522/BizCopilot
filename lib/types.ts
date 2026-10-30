@@ -16,6 +16,8 @@ export interface InventoryItem {
   supplierLeadDays: number;
   unitCost: number;
   retailPrice: number;
+  barcode?: string;
+  attributes?: Record<string, unknown>;
 }
 
 export type InventoryStatus = 'critical' | 'warning' | 'healthy';
@@ -115,7 +117,7 @@ export interface DoingWellItem {
 export interface AIRecommendation {
   id: string;
   priority: 'high' | 'medium' | 'low';
-  category: 'Stockout Prevention' | 'Sales Decline Investigation' | 'Dead Stock Reduction' | 'Replenishment';
+  category: 'Stockout Prevention' | 'Sales Decline Investigation' | 'Dead Stock Reduction' | 'Replenishment' | string;
   title: string;
   productId: string;
   productName: string;
@@ -157,4 +159,4 @@ export interface ChatMessage {
   dataBadges?: { label: string; value: string; color?: string }[];
 }
 
-export type ActiveTab = 'overview' | 'sales' | 'inventory' | 'recommendations' | 'copilot' | 'import';
+export type ActiveTab = 'overview' | 'sales' | 'inventory' | 'recommendations' | 'copilot' | 'calendar' | 'import';

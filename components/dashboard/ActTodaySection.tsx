@@ -133,10 +133,10 @@ export const ActTodaySection: React.FC<ActTodaySectionProps> = ({
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
+                  <div className="flex items-center gap-2.5 flex-wrap self-end sm:self-auto">
                     <button
                       onClick={() => onNavigate(item.targetSection, item.productId)}
-                      className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:border-emerald-300 hover:text-emerald-800 transition-all active:scale-[0.98]"
+                      className="min-h-[48px] shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs hover:border-emerald-300 hover:text-emerald-800 transition-all active:scale-[0.98]"
                     >
                       <span>{t.btnInspect}</span>
                       <ArrowRight className="h-3.5 w-3.5" />
@@ -147,31 +147,34 @@ export const ActTodaySection: React.FC<ActTodaySectionProps> = ({
                         href={whatsappUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition-all active:scale-[0.98]"
+                        className="min-h-[48px] shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition-all active:scale-[0.98]"
                       >
-                        <MessageSquare className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">WhatsApp</span>
+                        <MessageSquare className="h-4 w-4" />
+                        <span>WhatsApp</span>
                       </a>
                     )}
 
                     {!isDone ? (
                       <button
                         onClick={() => handleMarkDone(item)}
-                        className="shrink-0 inline-flex items-center gap-1 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition-all active:scale-[0.98]"
+                        className="min-h-[48px] shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition-all active:scale-[0.98]"
                       >
-                        <Check className="h-3.5 w-3.5" />
+                        <Check className="h-4 w-4" />
                         <span>{t.btnDone}</span>
                       </button>
                     ) : (
-                      <span className="text-xs text-emerald-700 font-bold px-2">✓ Saved</span>
+                      <span className="min-h-[48px] flex items-center text-xs text-emerald-700 font-bold px-3">
+                        ✓ Saved
+                      </span>
                     )}
 
                     <button
                       onClick={() => handleDismiss(item)}
                       title={t.btnDismiss}
-                      className="rounded-lg p-1.5 text-slate-300 hover:text-slate-600 transition-colors"
+                      className="min-h-[48px] min-w-[48px] flex items-center justify-center rounded-xl p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                      aria-label={t.btnDismiss}
                     >
-                      <XCircle className="h-4 w-4" />
+                      <XCircle className="h-5 w-5" />
                     </button>
                   </div>
                 </div>

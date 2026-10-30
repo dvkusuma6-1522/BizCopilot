@@ -10,6 +10,7 @@ import {
   DailySalesPoint,
 } from '@/lib/engine';
 import { SupportedLanguage, translations } from '@/lib/i18n';
+import { CategoryConfig } from '@/lib/categories/types';
 import {
   X,
   Sliders,
@@ -38,6 +39,7 @@ interface InventoryDrawerProps {
   salesHistory?: DailySalesPoint[];
   lang?: SupportedLanguage;
   storeName?: string;
+  category?: CategoryConfig;
 }
 
 export const InventoryDrawer: React.FC<InventoryDrawerProps> = ({
@@ -46,6 +48,7 @@ export const InventoryDrawer: React.FC<InventoryDrawerProps> = ({
   salesHistory = [],
   lang = 'en',
   storeName = 'FreshMart Grocery',
+  category,
 }) => {
   const t = translations[lang] || translations.en;
 
@@ -105,7 +108,15 @@ export const InventoryDrawer: React.FC<InventoryDrawerProps> = ({
   if (!product) return null;
 
   // Format WhatsApp order message
-  const whatsappMsg = t.whatsappOrderMessage(storeName, product.productName, orderQty);
+  const whatsappMsg = category?.whatsappTemplates?.order
+    ? category.whatsappTemplates.order(
+        storeName,
+        product.productName,
+        orderQty,
+        product.attributes,
+        lang
+      )
+    : t.whatsappOrderMessage(storeName, product.productName, orderQty);
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappMsg)}`;
 
   return (
@@ -209,6 +220,39 @@ export const InventoryDrawer: React.FC<InventoryDrawerProps> = ({
               <span className="text-[10px] text-slate-400 block">remaining</span>
             </div>
           </div>
+
+          {/* Category Attributes (if present) */}
+          {category && category.productFields.length > 0 && (
+            <div className="rounded-2xl border border-slate-200/90 bg-slate-50/70 p-4 space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
+                {category.labels[lang] || category.labels.en} Domain Specifications
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {category.productFields.map((f) => {
+                  const rawVal = product.attributes?.[f.key];
+                  const valStr =
+                    rawVal !== undefined && rawVal !== ''
+                      ? f.format
+                        ? f.format(rawVal)
+                        : String(rawVal)
+                      : '—';
+                  return (
+                    <div
+                      key={f.key}
+                      className="rounded-xl border border-slate-200/80 bg-white p-2.5 text-xs"
+                    >
+                      <span className="text-[10px] text-slate-400 block truncate">
+                        {f.label[lang] || f.label.en}
+                      </span>
+                      <span className="font-bold text-slate-800 font-mono block mt-0.5 truncate">
+                        {valStr}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Interactive What-If Simulator Header */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">

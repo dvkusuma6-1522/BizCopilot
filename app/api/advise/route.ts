@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCategory } from '@/lib/categories/registry';
+import { BusinessCategoryId } from '@/lib/categories/types';
+
+import { DigestAction, renderDigestActionText } from '@/lib/engine/digest';
 
 interface RiskFact {
   productName: string;
@@ -23,8 +27,10 @@ interface DeadStockFact {
 }
 
 interface AdvisePayload {
+  categoryId?: BusinessCategoryId;
   language?: 'en' | 'kn' | 'hi';
   question?: string;
+  digestActions?: DigestAction[];
   stockoutRisks?: RiskFact[];
   salesDrops?: DropFact[];
   deadStock?: DeadStockFact[];
@@ -37,6 +43,7 @@ export async function POST(req: NextRequest) {
   try {
     const body: AdvisePayload = await req.json();
     const {
+      categoryId = 'kirana',
       language = 'en',
       question = '',
       stockoutRisks = [],
@@ -46,29 +53,48 @@ export async function POST(req: NextRequest) {
       revenueChangePct = 0,
     } = body;
 
+    const category = getCategory(categoryId);
+    const categoryName = category.labels[language] || category.labels.en;
+    const termStock = category.terms.stock[language] || category.terms.stock.en;
+    const termSupplier = category.terms.supplier[language] || category.terms.supplier.en;
+
     // Check if Gemini API key exists
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (apiKey) {
       try {
-        const promptSystem = `You are BizCopilot, an AI Sales & Inventory Advisor for small shop owners in India (kiranas, pharmacies, retailers).
+        const promptSystem = `You are BizCopilot, an expert AI Advisor specialized in ${categoryName} for small Indian business owners.
+DOMAIN FOCUS & VOCABULARY:
+- Business Type: ${categoryName}
+- Use domain terms: "${termStock}" for stock, "${termSupplier}" for supplier/vendor.
+- Specific domain concerns:
+  * Pharmacy: Near-expiry batches, drug return to stockist, prescription availability.
+  * Apparel: Broken size curves, color assortments, fashion season clearance.
+  * Restaurant: Ingredient freshness, daily kitchen prep, food cost %, spoilage risk.
+  * Perishables: Spoilage within 24h, evening discount clearance, morning mandi crates.
+  * Hardware: Contractor favorites, slow-moving bin items, depot transit times.
+  * Electronics: Rapid tech depreciation, high-margin accessories, model turnover.
+  * Distributor: Market credit collections, master cases, retailer delivery beats.
+  * Manufacturer: Bottleneck raw materials, assembly stoppage prevention.
+
 CRITICAL CONSTRAINTS:
 1. FACTS FIRST: Rely ONLY on the aggregated facts provided below. Never invent or hallucinate any numbers or dates.
-2. Plain, owner-friendly language: No complex finance jargon. Say "money tied up" not "capital exposure", "days of stock left" not "days of cover".
+2. Plain, owner-friendly language: No complex finance jargon.
 3. Provide actionable, concise advice.
 4. Respond in language: ${language === 'kn' ? 'Kannada (ಕನ್ನಡ)' : language === 'hi' ? 'Hindi (हिन्दी)' : 'English'}.
 
-CURRENT COMPUTED STORE FACTS:
+CURRENT COMPUTED FACTS:
+- Business: ${categoryName}
 - Total Revenue: ₹${totalRevenue.toLocaleString('en-IN')} (${revenueChangePct >= 0 ? '+' : ''}${revenueChangePct}% vs previous period)
 - Stockout Risks: ${
           stockoutRisks.length > 0
             ? stockoutRisks
                 .map(
                   (r) =>
-                    `${r.productName}: ${r.daysOfCover}d stock left, delivery takes ${r.supplierLeadDays}d. Recommended order: ${r.reorderQuantity} units.`
+                    `${r.productName}: ${r.daysOfCover}d stock left, ${termSupplier} takes ${r.supplierLeadDays}d. Recommended order: ${r.reorderQuantity} units.`
                 )
                 .join('; ')
-            : 'None (All stock healthy)'
+            : 'None (Stock healthy)'
         }
 - Significant Sales Drops: ${
           salesDrops.length > 0
@@ -85,13 +111,29 @@ CURRENT COMPUTED STORE FACTS:
             ? deadStock
                 .map(
                   (ds) =>
-                    `${ds.productName}: ₹${ds.costValue.toLocaleString('en-IN')} tied up in ${ds.stockOnHand} unsold units`
+                    `${ds.productName}: ₹${ds.costValue.toLocaleString('en-IN')} locked in ${ds.stockOnHand} unsold units`
                 )
                 .join('; ')
             : 'None'
         }
+${
+  body.digestActions && body.digestActions.length > 0
+    ? `\nTOP 3 ACTION DIGEST ITEMS (Keep all numbers EXACT, rewrite in friendly shopkeeper language):\n` +
+      body.digestActions
+        .map((a, i) => {
+          const t = renderDigestActionText(a, language);
+          return `${i + 1}. [${a.type}] ${t.title}: ${t.explanation} Action: ${t.actionText}`;
+        })
+        .join('\n')
+    : ''
+}
 
-USER QUESTION: ${question || "What should I act on today?"}`;
+USER QUESTION: ${
+  question ||
+  (body.digestActions && body.digestActions.length > 0
+    ? `Provide a warm, encouraging 3-point daily digest for the owner.`
+    : 'What should I act on today?')
+}`;
 
         const geminiRes = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -110,14 +152,14 @@ USER QUESTION: ${question || "What should I act on today?"}`;
 
         if (geminiRes.ok) {
           const data = await geminiRes.json();
-          const aiText =
-            data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
           if (aiText.trim()) {
             return NextResponse.json({
               success: true,
               advice: aiText.trim(),
               mode: 'ai-enhanced',
               provider: 'Google Gemini',
+              categoryId,
               numbersVerified: true,
             });
           }
@@ -127,16 +169,43 @@ USER QUESTION: ${question || "What should I act on today?"}`;
       }
     }
 
-    // Deterministic Rule-Based Fallback (Works 100% without API key)
+    // Deterministic Rule-Based Fallback (Category-aware & Multilingual)
     const adviceLines: string[] = [];
 
+    if (
+      body.digestActions &&
+      body.digestActions.length > 0 &&
+      stockoutRisks.length === 0 &&
+      salesDrops.length === 0
+    ) {
+      const heading =
+        language === 'kn'
+          ? `**ಇಂದಿನ ಟಾಪ್ ೩ BizCopilot ನಿರ್ಧಾರಗಳು (${categoryName}):**\n`
+          : language === 'hi'
+          ? `**आज के शीर्ष 3 व्यावसायिक निर्णय (${categoryName}):**\n`
+          : `**Today's Top 3 Decisions (${categoryName}):**\n`;
+      adviceLines.push(heading);
+      body.digestActions.forEach((a, i) => {
+        const t = renderDigestActionText(a, language);
+        adviceLines.push(`${i + 1}. **${t.title}**\n   • ${t.explanation}\n   👉 ${t.actionText}`);
+      });
+      return NextResponse.json({
+        success: true,
+        advice: adviceLines.join('\n\n'),
+        mode: 'deterministic',
+        provider: 'BizCopilot Rule Engine',
+        categoryId,
+        numbersVerified: true,
+      });
+    }
+
     if (language === 'kn') {
-      adviceLines.push('**BizCopilot ಇಂದಿನ ಮುಖ್ಯ ಸಲಹೆಗಳು:**\n');
+      adviceLines.push(`**BizCopilot ಇಂದಿನ ಮುಖ್ಯ ಸಲಹೆಗಳು (${categoryName}):**\n`);
       if (stockoutRisks.length > 0) {
-        adviceLines.push(`🚨 **ತುರ್ತು ದಾಸ್ತಾನು ಆರ್ಡರ್:**`);
+        adviceLines.push(`🚨 **ತುರ್ತು ರೀಆರ್ಡರ್ (${termSupplier}):**`);
         for (const r of stockoutRisks) {
           adviceLines.push(
-            `• **${r.productName}**: ಕೇವಲ ~${r.daysOfCover} ದಿನಗಳ ದಾಸ್ತಾನು ಉಳಿದಿದೆ, ಆದರೆ ಡೆಲಿವರಿಗೆ ${r.supplierLeadDays} ದಿನ ಬೇಕಾಗುತ್ತದೆ. ಶೆಲ್ಫ್ ಖಾಲಿಯಾಗದಂತೆ ಇಂದೇ **${r.reorderQuantity} ಯೂನಿಟ್‌ಗಳನ್ನು** WhatsApp ಮೂಲಕ ಆರ್ಡರ್ ಮಾಡಿ.`
+            `• **${r.productName}**: ಕೇವಲ ~${r.daysOfCover} ದಿನಗಳ ${termStock} ಉಳಿದಿದೆ, ಆದರೆ ${termSupplier} ನಿಂದ ಬರಲು ${r.supplierLeadDays} ದಿನ ಬೇಕಾಗುತ್ತದೆ. ಇಂದೇ **${r.reorderQuantity} ಯೂನಿಟ್‌ಗಳನ್ನು** WhatsApp ಮೂಲಕ ಆರ್ಡರ್ ಮಾಡಿ.`
           );
         }
       }
@@ -144,7 +213,7 @@ USER QUESTION: ${question || "What should I act on today?"}`;
         adviceLines.push(`\n📉 **ಮಾರಾಟದಲ್ಲಿ ಇಳಿಕೆ ಕಂಡ ವಸ್ತುಗಳು:**`);
         for (const d of salesDrops) {
           adviceLines.push(
-            `• **${d.productName}**: ಮಾರಾಟ ${d.changePct}% ಇಳಿಕೆಯಾಗಿದೆ (${d.previousUnits} ರ ಎದುರು ${d.currentUnits} ಯೂನಿಟ್). ಕೌಂಟರ್ ಮುಂಭಾಗದಲ್ಲಿ ಪ್ರದರ್ಶಿಸಿ.`
+            `• **${d.productName}**: ಮಾರಾಟ ${d.changePct}% ಇಳಿಕೆಯಾಗಿದೆ (${d.previousUnits} ರ ಎದುರು ${d.currentUnits} ಯೂನಿಟ್).`
           );
         }
       }
@@ -152,18 +221,18 @@ USER QUESTION: ${question || "What should I act on today?"}`;
         adviceLines.push(`\n📦 **ಮಾರಾಟವಾಗದ ದಾಸ್ತಾನಿನಲ್ಲಿ ಸಿಲುಕಿರುವ ಹಣ:**`);
         for (const ds of deadStock) {
           adviceLines.push(
-            `• **${ds.productName}**: ${ds.stockOnHand} ಯೂನಿಟ್‌ಗಳು ನಿಷ್ಕ್ರಿಯವಾಗಿದ್ದು ₹${ds.costValue.toLocaleString('en-IN')} ಹಣ ಸಿಲುಕಿದೆ. 20% ರಿಯಾಯಿತಿ ನೀಡಿ ಹಣ ಮರಳಿ ಪಡೆಯಿರಿ.`
+            `• **${ds.productName}**: ${ds.stockOnHand} ಯೂನಿಟ್‌ಗಳು ನಿಷ್ಕ್ರಿಯವಾಗಿದ್ದು ₹${ds.costValue.toLocaleString('en-IN')} ಹಣ ಸಿಲುಕಿದೆ.`
           );
         }
       }
-      adviceLines.push('\n*ಎಲ್ಲಾ ಸಂಖ್ಯೆಗಳು ನಿಮ್ಮ ಲೆಕ್ಕಾಚಾರಗಳಿಂದ ನೇರವಾಗಿ ಬಂದಿವೆ.*');
+      adviceLines.push(`\n*ಎಲ್ಲಾ ಸಂಖ್ಯೆಗಳು ನಿಮ್ಮ ${categoryName} ಲೆಕ್ಕಾಚಾರಗಳಿಂದ ನೇರವಾಗಿ ಬಂದಿವೆ.*`);
     } else if (language === 'hi') {
-      adviceLines.push('**BizCopilot आज की मुख्य सलाह:**\n');
+      adviceLines.push(`**BizCopilot आज की मुख्य सलाह (${categoryName}):**\n`);
       if (stockoutRisks.length > 0) {
-        adviceLines.push(`🚨 **तुरंत रीऑर्डर करें:**`);
+        adviceLines.push(`🚨 **तुरंत रीऑर्डर करें (${termSupplier}):**`);
         for (const r of stockoutRisks) {
           adviceLines.push(
-            `• **${r.productName}**: लगभग ~${r.daysOfCover} दिन का स्टॉक बाकी है, जबकि डिलीवरी में ${r.supplierLeadDays} दिन लगते हैं। शेल्फ खाली होने से पहले आज ही **${r.reorderQuantity} यूनिट्स** ऑर्डर करें।`
+            `• **${r.productName}**: लगभग ~${r.daysOfCover} दिन का ${termStock} बचा है, जबकि ${termSupplier} से सप्लाई में ${r.supplierLeadDays} दिन लगते हैं। आज ही **${r.reorderQuantity} यूनिट्स** का ऑर्डर भेजें।`
           );
         }
       }
@@ -179,18 +248,18 @@ USER QUESTION: ${question || "What should I act on today?"}`;
         adviceLines.push(`\n📦 **न बिकने वाले सामान में फंसा पैसा:**`);
         for (const ds of deadStock) {
           adviceLines.push(
-            `• **${ds.productName}**: ${ds.stockOnHand} यूनिट्स बिना बिके पड़े हैं और ₹${ds.costValue.toLocaleString('en-IN')} की पूंजी फंसी है। कॉम्बो ऑफर देकर नकदी निकालें।`
+            `• **${ds.productName}**: ${ds.stockOnHand} यूनिट्स बिना बिके पड़े हैं और ₹${ds.costValue.toLocaleString('en-IN')} की पूंजी फंसी है।`
           );
         }
       }
-      adviceLines.push('\n*सभी आंकड़े आपकी दुकान की वास्तविक बिक्री गणना पर आधारित हैं।*');
+      adviceLines.push(`\n*सभी आंकड़े आपकी दुकान की वास्तविक बिक्री गणना पर आधारित हैं।*`);
     } else {
-      adviceLines.push('**BizCopilot Action Priority for Today:**\n');
+      adviceLines.push(`**BizCopilot Action Priority for Today (${categoryName}):**\n`);
       if (stockoutRisks.length > 0) {
-        adviceLines.push(`🚨 **Urgent Stockout Replenishment:**`);
+        adviceLines.push(`🚨 **Urgent Replenishment (${termSupplier}):**`);
         for (const r of stockoutRisks) {
           adviceLines.push(
-            `• **${r.productName}**: About ${r.daysOfCover} days of stock remaining, but supplier delivery takes ${r.supplierLeadDays} days. Place a reorder for **${r.reorderQuantity} units** now via WhatsApp to prevent lost revenue.`
+            `• **${r.productName}**: About ${r.daysOfCover} days of ${termStock} remaining, but ${termSupplier} takes ${r.supplierLeadDays} days. Place a reorder for **${r.reorderQuantity} units** now via WhatsApp to prevent stockouts.`
           );
         }
       }
@@ -198,19 +267,19 @@ USER QUESTION: ${question || "What should I act on today?"}`;
         adviceLines.push(`\n📉 **Investigate Sales Decline:**`);
         for (const d of salesDrops) {
           adviceLines.push(
-            `• **${d.productName}**: Sales dropped by ${d.changePct}% (sold ${d.currentUnits} units vs ${d.previousUnits} in previous period). Check shelf placement or pricing.`
+            `• **${d.productName}**: Sales dropped by ${d.changePct}% (sold ${d.currentUnits} units vs ${d.previousUnits} in previous period).`
           );
         }
       }
       if (deadStock.length > 0) {
-        adviceLines.push(`\n📦 **Liberate Trapped Working Capital:**`);
+        adviceLines.push(`\n📦 **Liberate Locked Working Capital:**`);
         for (const ds of deadStock) {
           adviceLines.push(
-            `• **${ds.productName}**: ${ds.stockOnHand} units sitting unsold with ₹${ds.costValue.toLocaleString('en-IN')} locked up at cost. Bundle with fast-selling items to convert to cash.`
+            `• **${ds.productName}**: ${ds.stockOnHand} units sitting unsold with ₹${ds.costValue.toLocaleString('en-IN')} locked at cost.`
           );
         }
       }
-      adviceLines.push('\n*Facts First: All figures are deterministically calculated by BizCopilot Engine.*');
+      adviceLines.push(`\n*Facts First: All figures are deterministically calculated for ${categoryName}.*`);
     }
 
     return NextResponse.json({
@@ -218,6 +287,7 @@ USER QUESTION: ${question || "What should I act on today?"}`;
       advice: adviceLines.join('\n'),
       mode: 'deterministic',
       provider: 'BizCopilot Rule Engine',
+      categoryId,
       numbersVerified: true,
     });
   } catch (err: unknown) {

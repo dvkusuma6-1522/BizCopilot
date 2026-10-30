@@ -7,13 +7,16 @@ import {
   Boxes,
   Sparkles,
   Bot,
+  Calendar,
   UploadCloud,
-  Store,
+  Settings,
   X,
 } from 'lucide-react';
 import { ActiveTab } from '@/lib/types';
 import { STORE_NAME, STORE_TYPE } from '@/lib/demo-data';
 import { SupportedLanguage, translations } from '@/lib/i18n';
+import { CategoryConfig } from '@/lib/categories/types';
+import { CategoryIcon } from '@/components/categories/CategoryIcon';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -23,6 +26,10 @@ interface SidebarProps {
   stockoutCount: number;
   recommendationCount: number;
   lang?: SupportedLanguage;
+  category?: CategoryConfig;
+  storeName?: string;
+  skuCount?: number;
+  onOpenSettings?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -33,8 +40,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   stockoutCount,
   recommendationCount,
   lang = 'en',
+  category,
+  storeName,
+  skuCount = 12,
+  onOpenSettings,
 }) => {
   const t = translations[lang] || translations.en;
+  const currentStoreName = storeName || STORE_NAME;
+  const currentStoreType = category ? category.labels[lang] || category.labels.en : STORE_TYPE;
 
   const navItems = [
     {
@@ -68,6 +81,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: t.navCopilot,
       icon: Bot,
       pulse: true,
+    },
+    {
+      id: 'calendar' as ActiveTab,
+      label: t.navCalendar,
+      icon: Calendar,
     },
     {
       id: 'import' as ActiveTab,
@@ -175,22 +193,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="rounded-xl border border-slate-200/90 bg-slate-50/80 p-3.5">
             <div className="flex items-start gap-3">
               <div className="rounded-lg bg-white p-2 shadow-sm border border-slate-200/80 text-slate-700">
-                <Store className="h-4 w-4 text-emerald-600" />
+                <CategoryIcon
+                  iconName={category?.icon || 'Store'}
+                  className="h-4 w-4 text-emerald-600"
+                />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-semibold text-slate-900 truncate">{STORE_NAME}</h4>
+                  <h4 className="text-xs font-semibold text-slate-900 truncate">{currentStoreName}</h4>
                   <span className="inline-flex items-center rounded-full bg-emerald-100/80 px-1.5 py-0.2 text-[9px] font-medium text-emerald-700">
                     Live
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 truncate">{STORE_TYPE}</p>
+                <p className="text-[11px] text-slate-500 truncate">{currentStoreType}</p>
                 <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  12 Active SKUs Tracked
+                  {skuCount} Active SKUs Tracked
                 </div>
               </div>
             </div>
+            {onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs"
+              >
+                <Settings className="h-3.5 w-3.5 text-slate-500" />
+                <span>{t.settingsTitle.split(' ')[0]}</span>
+              </button>
+            )}
           </div>
         </div>
       </aside>

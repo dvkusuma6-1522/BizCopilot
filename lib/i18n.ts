@@ -9,7 +9,30 @@ export interface TranslationStrings {
   navInventory: string;
   navRecommendations: string;
   navCopilot: string;
+  navCalendar: string;
   navImport: string;
+
+  // Daily Digest
+  digestTitle: string;
+  digestSubtitle: string;
+  digestShareWhatsApp: string;
+  digestAllClear: string;
+
+  // Festival Calendar
+  calendarTitle: string;
+  calendarSubtitle: string;
+  calendarFilterMyCategory: string;
+  calendarFilterAll: string;
+  commonlyInDemandLabel: string;
+  stockCheckTitle: string;
+  daysAway: (days: number) => string;
+  festivalReminderBanner: (festivalName: string, daysAway: number) => string;
+
+  // Settings
+  settingsTitle: string;
+  settingsFestivalReminders: string;
+  settingsDailyDigestReminder: string;
+  settingsDigestTime: string;
 
   // Header & Controls
   ownerMode: string;
@@ -76,7 +99,28 @@ export const translations: Record<SupportedLanguage, TranslationStrings> = {
     navInventory: 'Inventory Intelligence',
     navRecommendations: 'AI Recommendations',
     navCopilot: 'AI Copilot',
+    navCalendar: 'Festival Calendar',
     navImport: 'Data Import (CSV/Excel)',
+
+    digestTitle: "Today's Action Digest",
+    digestSubtitle: 'Top 3 urgent actions ranked by priority to protect today’s cash and shelf supply',
+    digestShareWhatsApp: 'Share Digest on WhatsApp',
+    digestAllClear: 'All stocks and daily sales velocities are healthy today. No urgent interventions needed.',
+
+    calendarTitle: 'Festival & Peak-Day Calendar',
+    calendarSubtitle: 'Advance preparation for Indian festivals, seasonal peaks, and school cycles',
+    calendarFilterMyCategory: 'My Category Events',
+    calendarFilterAll: 'All Festivals',
+    commonlyInDemandLabel: 'Commonly in demand',
+    stockCheckTitle: 'Your Stock Check',
+    daysAway: (days) => (days === 0 ? 'Happening today!' : days === 1 ? 'Tomorrow!' : `${days} days away`),
+    festivalReminderBanner: (name, days) =>
+      `Upcoming Festival: ${name} is ${days} days away. Check stock for items commonly in demand before distributor cutoffs.`,
+
+    settingsTitle: 'Settings & Reminders',
+    settingsFestivalReminders: 'In-app festival advance reminders (14d and 3d before)',
+    settingsDailyDigestReminder: 'Daily Digest morning reminder notification',
+    settingsDigestTime: 'Digest reminder time (IST)',
 
     ownerMode: 'Owner Mode',
     analystMode: 'Analyst Mode',
@@ -142,7 +186,28 @@ export const translations: Record<SupportedLanguage, TranslationStrings> = {
     navInventory: 'ದಾಸ್ತಾನು ಬುದ್ಧಿವಂತಿಕೆ (Stock)',
     navRecommendations: 'AI ಸಲಹೆಗಳು (Advice)',
     navCopilot: 'AI Copilot ಸಹಾಯ',
+    navCalendar: 'ಹಬ್ಬಗಳ ಕ್ಯಾಲೆಂಡರ್ (Calendar)',
     navImport: 'ಡೇಟಾ ಅಪ್ಲೋಡ್ (Import)',
+
+    digestTitle: 'ಇಂದಿನ ಮುಖ್ಯ ನಿರ್ಧಾರಗಳು (Action Digest)',
+    digestSubtitle: 'ದಾಸ್ತಾನು ಮತ್ತು ನಗದು ರಕ್ಷಿಸಲು ಅತ್ಯಂತ ತುರ್ತಾದ ಟಾಪ್ ೩ ಕ್ರಮಗಳು',
+    digestShareWhatsApp: 'WhatsApp ನಲ್ಲಿ ಶೇರ್ ಮಾಡಿ',
+    digestAllClear: 'ಇಂದು ಎಲ್ಲಾ ವಸ್ತುಗಳ ದಾಸ್ತಾನು ಮತ್ತು ಮಾರಾಟ ಸ್ಥಿತಿ ಉತ್ತಮವಾಗಿದೆ. ತುರ್ತು ಕ್ರಮದ ಅಗತ್ಯವಿಲ್ಲ.',
+
+    calendarTitle: 'ಹಬ್ಬಗಳು ಮತ್ತು ಸೀಸನ್ ಕ್ಯಾಲೆಂಡರ್',
+    calendarSubtitle: 'ಕರ್ನಾಟಕ ಮತ್ತು ಭಾರತೀಯ ಹಬ್ಬಗಳ ಮುಂಚಿತ ದಾಸ್ತಾನು ಯೋಜನೆ',
+    calendarFilterMyCategory: 'ನನ್ನ ಅಂಗಡಿಯ ಹಬ್ಬಗಳು',
+    calendarFilterAll: 'ಎಲ್ಲಾ ಹಬ್ಬಗಳು',
+    commonlyInDemandLabel: 'Commonly in demand',
+    stockCheckTitle: 'ನಿಮ್ಮ ದಾಸ್ತಾನು ಪರಿಶೀಲನೆ (Stock Check)',
+    daysAway: (days) => (days === 0 ? 'ಇಂದೇ ಹಬ್ಬ!' : days === 1 ? 'ನಾಳೆ!' : `ಇನ್ನು ${days} ದಿನ ಬಾಕಿ`),
+    festivalReminderBanner: (name, days) =>
+      `ಮುಂಬರುವ ಹಬ್ಬ: ${name} ಇನ್ನು ${days} ದಿನಗಳಲ್ಲಿದೆ. ಸಪ್ಲೈಯರ್ ರಜೆ ಅಥವಾ ಕೊರತೆಯ ಮುನ್ನ ಬೇಡಿಕೆಯ ಸಾಮಗ್ರಿಗಳನ್ನು ದಾಸ್ತಾನು ಮಾಡಿಕೊಳ್ಳಿ.`,
+
+    settingsTitle: 'ಸೆಟ್ಟಿಂಗ್ಸ್ ಮತ್ತು ನೆನಪಿಸುವಿಕೆಗಳು (Settings)',
+    settingsFestivalReminders: 'ಹಬ್ಬದ ಮುನ್ಸೂಚನೆ ಸೂಚನೆಗಳು (೧೪ ಮತ್ತು ೩ ದಿನ ಮುಂಚೆ)',
+    settingsDailyDigestReminder: 'ದೈನಂದಿನ ಬೆಳಗಿನ ಆಕ್ಷನ್ ಡೈಜೆಸ್ಟ್ ನೋಟಿಫಿಕೇಶನ್',
+    settingsDigestTime: 'ಡೈಜೆಸ್ಟ್ ಸಮಯ (IST)',
 
     ownerMode: 'ಮಾಲೀಕರ ಮೋಡ್ (Owner)',
     analystMode: 'ವಿಶ್ಲೇಷಕ ಮೋಡ್ (Analyst)',
@@ -208,7 +273,28 @@ export const translations: Record<SupportedLanguage, TranslationStrings> = {
     navInventory: 'स्टॉक की स्थिति (Stock)',
     navRecommendations: 'AI सलाह (Advice)',
     navCopilot: 'AI Copilot सहायता',
+    navCalendar: 'त्यौहार कैलेंडर (Calendar)',
     navImport: 'डेटा जोड़ें (Import)',
+
+    digestTitle: 'आज का एक्शन डाइजेस्ट (Action Digest)',
+    digestSubtitle: 'स्टॉक और कार्यशील पूँजी सुरक्षित करने हेतु शीर्ष 3 प्राथमिकताएं',
+    digestShareWhatsApp: 'WhatsApp पर साझा करें',
+    digestAllClear: 'आज आपकी दुकान में सभी उत्पादों का स्टॉक और बिक्री सामान्य है। किसी आपातकालीन कदम की आवश्यकता नहीं है।',
+
+    calendarTitle: 'त्यौहार और पीक-डे कैलेंडर',
+    calendarSubtitle: 'भारतीय त्यौहारों और मौसमी बिक्री हेतु अग्रिम स्टॉक योजना',
+    calendarFilterMyCategory: 'मेरी दुकान के त्यौहार',
+    calendarFilterAll: 'सभी त्यौहार',
+    commonlyInDemandLabel: 'Commonly in demand',
+    stockCheckTitle: 'आपकी दुकान का स्टॉक चेक (Stock Check)',
+    daysAway: (days) => (days === 0 ? 'आज ही त्यौहार है!' : days === 1 ? 'कल है!' : `${days} दिन बाकी`),
+    festivalReminderBanner: (name, days) =>
+      `आगामी त्यौहार: ${name} में ${days} दिन शेष हैं। थोक बाजार में भीड़ और कमी से पहले आवश्यक सामान स्टॉक कर लें।`,
+
+    settingsTitle: 'सेटिंग्स और रिमाइंडर (Settings)',
+    settingsFestivalReminders: 'त्यौहार अग्रिम चेतावनी रिमाइंडर (14 और 3 दिन पहले)',
+    settingsDailyDigestReminder: 'दैनिक सुबह का एक्शन डाइजेस्ट नोटिफिकेशन',
+    settingsDigestTime: 'डाइजेस्ट का समय (IST)',
 
     ownerMode: 'दुकानदार मोड (Owner)',
     analystMode: 'विस्तृत मोड (Analyst)',

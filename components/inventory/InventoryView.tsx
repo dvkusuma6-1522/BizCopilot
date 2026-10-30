@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { InventoryDrawer } from './InventoryDrawer';
 import { SupportedLanguage, translations } from '@/lib/i18n';
+import { CategoryConfig } from '@/lib/categories/types';
 
 interface InventoryViewProps {
   inventory: CalculatedInventoryItem[];
@@ -22,6 +23,7 @@ interface InventoryViewProps {
   onNavigate?: (tab: ActiveTab, productId?: string) => void;
   lang?: SupportedLanguage;
   storeName?: string;
+  category?: CategoryConfig;
 }
 
 export const InventoryView: React.FC<InventoryViewProps> = ({
@@ -30,8 +32,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   highlightProductId,
   lang = 'en',
   storeName = 'FreshMart Grocery',
+  category,
 }) => {
   const t = translations[lang] || translations.en;
+  const gridFields = category?.productFields?.filter((f) => f.isGridColumn) || [];
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | InventoryStatus>('all');
   const [categoryFilter, setCategoryFilter] = useState('All');
@@ -227,6 +231,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     Category <ArrowUpDown className="h-3 w-3" />
                   </div>
                 </th>
+                {gridFields.map((f) => (
+                  <th key={f.key} className="py-3.5 px-3 text-left">
+                    {f.label[lang] || f.label.en}
+                  </th>
+                ))}
                 <th className="py-3.5 text-center">ABC Rank</th>
                 <th
                   onClick={() => handleSort('stockOnHand')}
@@ -270,11 +279,19 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 const Icon = badge.icon;
                 const isHighlighted = item.productId === highlightProductId;
 
-                const whatsappMsg = t.whatsappOrderMessage(
-                  storeName,
-                  item.productName,
-                  item.recommendedReorderQty || 30
-                );
+                const whatsappMsg = category?.whatsappTemplates?.order
+                  ? category.whatsappTemplates.order(
+                      storeName,
+                      item.productName,
+                      item.recommendedReorderQty || 30,
+                      item.attributes,
+                      lang
+                    )
+                  : t.whatsappOrderMessage(
+                      storeName,
+                      item.productName,
+                      item.recommendedReorderQty || 30
+                    );
                 const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappMsg)}`;
 
                 return (
@@ -296,6 +313,22 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         {item.category}
                       </span>
                     </td>
+                    {gridFields.map((f) => {
+                      const rawVal = item.attributes?.[f.key];
+                      const displayVal =
+                        rawVal !== undefined && rawVal !== ''
+                          ? f.format
+                            ? f.format(rawVal)
+                            : String(rawVal)
+                          : '—';
+                      return (
+                        <td key={f.key} className="py-3.5 px-3">
+                          <span className="font-mono text-[11px] font-semibold text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded-md border border-slate-200/60">
+                            {displayVal}
+                          </span>
+                        </td>
+                      );
+                    })}
                     <td className="py-3.5 text-center">
                       <span
                         className={`inline-block rounded-md px-1.5 py-0.2 text-[10px] font-bold ${
@@ -382,6 +415,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         onClose={() => setSelectedProduct(null)}
         lang={lang}
         storeName={storeName}
+        category={category}
       />
     </div>
   );

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { ActiveTab } from '@/lib/types';
-import { LayoutDashboard, TrendingUp, Boxes, Bot, UploadCloud } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Boxes, Bot, Calendar } from 'lucide-react';
 import { SupportedLanguage, translations } from '@/lib/i18n';
 
 interface MobileBottomNavProps {
@@ -23,9 +23,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   const tabs: { id: ActiveTab; label: string; icon: typeof LayoutDashboard; badge?: number }[] = [
     { id: 'overview', label: t.navOverview.split(' ')[0], icon: LayoutDashboard },
     { id: 'inventory', label: t.navInventory.split(' ')[0], icon: Boxes, badge: stockoutCount },
+    {
+      id: 'calendar',
+      label: lang === 'kn' ? 'ಕ್ಯಾಲೆಂಡರ್' : lang === 'hi' ? 'कैलेंडर' : 'Calendar',
+      icon: Calendar,
+    },
     { id: 'sales', label: t.navSales.split(' ')[0], icon: TrendingUp },
     { id: 'copilot', label: 'Copilot', icon: Bot },
-    { id: 'import', label: 'Data', icon: UploadCloud },
   ];
 
   return (
@@ -38,7 +42,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`relative flex flex-1 flex-col items-center justify-center py-1 transition-colors ${
+            className={`relative flex flex-1 flex-col items-center justify-center min-h-[48px] py-1 transition-colors ${
               isActive ? 'text-emerald-700 font-bold' : 'text-slate-500 hover:text-slate-900'
             }`}
           >

@@ -1,11 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Menu, Calendar, RotateCcw, Bot, ShieldCheck, Sparkles, Globe } from 'lucide-react';
+import { Menu, Calendar, RotateCcw, Bot, ShieldCheck, Sparkles, Globe, Settings } from 'lucide-react';
 import { ActiveTab } from '@/lib/types';
 import { STORE_NAME } from '@/lib/demo-data';
 import { SupportedLanguage, translations } from '@/lib/i18n';
 import { formatINR } from '@/lib/analytics';
+import { CategoryConfig } from '@/lib/categories/types';
+import { CategoryIcon } from '@/components/categories/CategoryIcon';
 
 interface HeaderProps {
   activeTab: ActiveTab;
@@ -22,6 +24,10 @@ interface HeaderProps {
   moneySaved: number;
   onOpenMoneySaved: () => void;
   onOpenTour: () => void;
+  onOpenSettings?: () => void;
+  category?: CategoryConfig;
+  onOpenCategoryPicker?: () => void;
+  businessName?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -39,13 +45,18 @@ export const Header: React.FC<HeaderProps> = ({
   moneySaved,
   onOpenMoneySaved,
   onOpenTour,
+  onOpenSettings,
+  category,
+  onOpenCategoryPicker,
+  businessName,
 }) => {
   const t = translations[lang] || translations.en;
+  const activeStoreName = businessName || STORE_NAME;
 
   const titles: Record<ActiveTab, { title: string; subtitle: string }> = {
     overview: {
       title: t.brandName,
-      subtitle: `${t.tagline} • ${STORE_NAME}`,
+      subtitle: `${t.tagline} • ${activeStoreName}`,
     },
     sales: {
       title: t.navSales,
@@ -62,6 +73,10 @@ export const Header: React.FC<HeaderProps> = ({
     copilot: {
       title: t.navCopilot,
       subtitle: 'Ask natural questions about sales trends, reorders, and inventory decisions',
+    },
+    calendar: {
+      title: t.calendarTitle,
+      subtitle: t.calendarSubtitle,
     },
     import: {
       title: t.navImport,
@@ -103,6 +118,23 @@ export const Header: React.FC<HeaderProps> = ({
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
             <span>{t.moneySaved}:</span>
             <span className="text-emerald-900 font-extrabold">{formatINR(moneySaved)}</span>
+          </button>
+        )}
+
+        {/* Category Badge & Switcher */}
+        {category && (
+          <button
+            onClick={onOpenCategoryPicker}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-800 transition-all shadow-xs"
+            title="Switch Business Type"
+          >
+            <CategoryIcon iconName={category.icon} className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="hidden md:inline font-bold">
+              {category.labels[lang] || category.labels.en}
+            </span>
+            <span className="rounded-full bg-slate-100 px-1.5 py-0.2 text-[9px] font-bold text-slate-600 border border-slate-200">
+              Switch
+            </span>
           </button>
         )}
 
@@ -184,6 +216,19 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
+        {/* Quick Calendar Button */}
+        <button
+          onClick={() => setActiveTab('calendar')}
+          className={`rounded-xl border p-2 transition-colors ${
+            activeTab === 'calendar'
+              ? 'border-purple-300 bg-purple-50 text-purple-700'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+          title={t.navCalendar}
+        >
+          <Calendar className="h-4 w-4" />
+        </button>
+
         {/* Quick Tour Button */}
         <button
           onClick={onOpenTour}
@@ -192,6 +237,17 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <Sparkles className="h-4 w-4 text-emerald-600" />
         </button>
+
+        {/* Settings Button */}
+        {onOpenSettings && (
+          <button
+            onClick={onOpenSettings}
+            className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            title={t.settingsTitle}
+          >
+            <Settings className="h-4 w-4 text-slate-600" />
+          </button>
+        )}
 
         {/* Quick Ask Copilot Button if not on Copilot */}
         {activeTab !== 'copilot' && (
