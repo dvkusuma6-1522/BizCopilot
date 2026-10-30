@@ -125,20 +125,20 @@ export function generateCopilotResponse(
       return {
         sender: 'assistant',
         text: `**${urgent.productName}** needs attention first before all other items!\n\n` +
-          `• **Current Stock:** ${urgent.stockOnHand} units\n` +
-          `• **Daily Customer Demand:** ~${urgent.avgDailySales} units/day\n` +
-          `• **Days of Cover Remaining:** ~${urgent.daysOfCover} days\n` +
-          `• **Supplier Delivery Lead Time:** **${urgent.supplierLeadDays} days**\n\n` +
-          `⚠️ **Critical Warning:** Your current stock will be exhausted in ~${urgent.daysOfCover} days, but delivery requires ${urgent.supplierLeadDays} days. You face an imminent stockout.\n\n` +
-          `**Immediate Action:** Issue an expedited purchase order for **${urgent.recommendedReorderQty} units** today.` +
+          `• **Current Stock on Hand:** ${urgent.stockOnHand} units\n` +
+          `• **Normal Daily Demand:** ~${urgent.avgDailySales} units/day\n` +
+          `• **Stock Left:** **About ${urgent.daysOfCover} days of stock remaining**\n` +
+          `• **Supplier Delivery Time:** **Takes ${urgent.supplierLeadDays} days to arrive**\n\n` +
+          `⚠️ **Your stock may run out before the next delivery arrives.** Current stock will only last ~${urgent.daysOfCover} days, but delivery takes ${urgent.supplierLeadDays} days.\n\n` +
+          `**Immediate Action:** Call your distributor today and order **${urgent.recommendedReorderQty || urgent.reorderLevel} units**.` +
           (warningItems.length > 0
-            ? `\n\n*Secondary items approaching reorder threshold: ${warningItems.map((w) => w.productName).join(', ')}.*`
+            ? `\n\n*Other items getting low on stock: ${warningItems.map((w) => w.productName).join(', ')}.*`
             : ''),
         dataBadges: [
           { label: 'Priority Reorder', value: urgent.productName, color: 'red' },
-          { label: 'Stock Cover', value: `${urgent.daysOfCover} days`, color: 'red' },
-          { label: 'Lead Time', value: `${urgent.supplierLeadDays} days`, color: 'amber' },
-          { label: 'Suggested Order', value: `${urgent.recommendedReorderQty} units`, color: 'blue' },
+          { label: 'Stock Left', value: `~${urgent.daysOfCover} days`, color: 'red' },
+          { label: 'Delivery Takes', value: `${urgent.supplierLeadDays} days`, color: 'amber' },
+          { label: 'Suggested Order', value: `${urgent.recommendedReorderQty || urgent.reorderLevel} units`, color: 'blue' },
         ],
         suggestedFollowUps: [
           'Give me the top three actions I should take today.',

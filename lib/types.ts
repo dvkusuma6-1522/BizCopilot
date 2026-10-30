@@ -19,19 +19,23 @@ export interface InventoryItem {
 }
 
 export type InventoryStatus = 'critical' | 'warning' | 'healthy';
+export type ABCClass = 'A' | 'B' | 'C';
 
 export interface CalculatedInventoryItem extends InventoryItem {
   unitsSoldInPeriod: number;
   avgDailySales: number;
-  daysOfCover: number; // In days; Infinity or high number if 0 sales
+  daysOfCover: number; // In days; 999 or high if 0 sales
   status: InventoryStatus;
   statusReason: string;
+  friendlyStatusText: string;
   isStockoutRisk: boolean;
   isDeadStock: boolean;
   isOverstocked: boolean;
   deadStockValue: number; // stockOnHand * unitCost
   suggestedAction: string;
   recommendedReorderQty: number;
+  howCalculated: string;
+  abcClass?: ABCClass;
 }
 
 export interface PeriodSummary {
@@ -69,6 +73,45 @@ export interface BusinessAlert {
   targetSection: 'sales' | 'inventory' | 'recommendations';
 }
 
+// Owner-centric dashboard cards for the redesigned Home Screen
+export interface ActTodayItem {
+  id: string;
+  productId: string;
+  productName: string;
+  category: string;
+  headline: string;
+  simpleExplanation: string;
+  supportingNumbers: string;
+  suggestedAction: string;
+  howCalculated: string;
+  targetSection: 'sales' | 'inventory';
+}
+
+export interface WatchThisWeekItem {
+  id: string;
+  productId: string;
+  productName: string;
+  category: string;
+  headline: string;
+  reason: string;
+  supportingNumbers: string;
+  recommendedAction: string;
+  howCalculated: string;
+  targetSection: 'sales' | 'inventory';
+}
+
+export interface DoingWellItem {
+  id: string;
+  productId: string;
+  productName: string;
+  category: string;
+  headline: string;
+  positiveSignal: string;
+  supportingNumbers: string;
+  takeaway: string;
+  targetSection: 'sales' | 'inventory';
+}
+
 export interface AIRecommendation {
   id: string;
   priority: 'high' | 'medium' | 'low';
@@ -76,9 +119,11 @@ export interface AIRecommendation {
   title: string;
   productId: string;
   productName: string;
-  reason: string;
-  supportingEvidence: string;
-  recommendedNextAction: string;
+  whatIsHappening: string;
+  supportingNumbers: string;
+  whyOwnerShouldCare: string;
+  recommendedNextStep: string;
+  howCalculated: string;
   targetSection: 'sales' | 'inventory';
 }
 
@@ -99,6 +144,8 @@ export interface ProductPerformance {
   shareOfRevenue: number;
   baselineUnits?: number;
   changePct?: number;
+  abcClass: ABCClass;
+  abcDescription: string;
 }
 
 export interface ChatMessage {

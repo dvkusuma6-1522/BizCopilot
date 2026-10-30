@@ -11,6 +11,9 @@ import {
   ArrowRight,
   Filter,
   CheckCircle,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface RecommendationsViewProps {
@@ -24,6 +27,7 @@ export const RecommendationsView: React.FC<RecommendationsViewProps> = ({
 }) => {
   const [priorityFilter, setPriorityFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [expandedMathId, setExpandedMathId] = useState<string | null>(null);
 
   const categories = [
     'all',
@@ -74,19 +78,23 @@ export const RecommendationsView: React.FC<RecommendationsViewProps> = ({
     }
   };
 
+  const toggleMath = (id: string) => {
+    setExpandedMathId(expandedMathId === id ? null : id);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-slate-900">Deterministic AI Recommendations</h2>
+            <h2 className="text-lg font-bold text-slate-900">AI Advisor Recommendations</h2>
             <span className="rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold">
-              {recommendations.length} Actionable Items
+              {recommendations.length} Actionable Advice
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Rule-based prescriptive actions derived from customer velocity, inventory buffers, and distributor lead times
+            Practical business decisions based on customer demand, delivery times, and idle shop capital
           </p>
         </div>
 
@@ -144,6 +152,7 @@ export const RecommendationsView: React.FC<RecommendationsViewProps> = ({
           filtered.map((rec) => {
             const Icon = getCategoryIcon(rec.category);
             const style = getPriorityStyle(rec.priority);
+            const isMathOpen = expandedMathId === rec.id;
 
             return (
               <div
@@ -167,8 +176,11 @@ export const RecommendationsView: React.FC<RecommendationsViewProps> = ({
                           {rec.category}
                         </span>
                       </div>
-                      <p className="mt-1.5 text-xs text-slate-600 font-medium leading-relaxed">
-                        {rec.reason}
+
+                      {/* What is happening */}
+                      <p className="mt-1.5 text-xs text-slate-700 font-medium leading-relaxed">
+                        <strong className="text-slate-900 font-semibold">What is happening: </strong>
+                        {rec.whatIsHappening}
                       </p>
                     </div>
                   </div>
@@ -182,22 +194,48 @@ export const RecommendationsView: React.FC<RecommendationsViewProps> = ({
                   </button>
                 </div>
 
-                {/* Evidence Box */}
+                {/* Supporting Numbers Box */}
                 <div className="mt-3.5 rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs text-slate-700">
-                  <div className="font-semibold text-slate-900 mb-1">Supporting Quantitative Facts:</div>
+                  <div className="font-semibold text-slate-900 mb-1">Supporting Numbers:</div>
                   <div className="font-mono text-[11px] text-slate-600 bg-white rounded-lg p-2 border border-slate-200/60">
-                    {rec.supportingEvidence}
+                    {rec.supportingNumbers}
                   </div>
                 </div>
 
-                {/* Next Action Box */}
-                <div className="mt-3 flex items-start gap-2 rounded-xl bg-emerald-50/60 border border-emerald-200/60 p-3 text-xs text-emerald-950">
+                {/* Why the Owner Should Care */}
+                <div className="mt-2.5 rounded-lg bg-amber-50/50 border border-amber-200/60 p-2.5 text-xs text-amber-950">
+                  <span className="font-bold text-amber-900">Why you should care: </span>
+                  <span>{rec.whyOwnerShouldCare}</span>
+                </div>
+
+                {/* Recommended Next Step Box */}
+                <div className="mt-2.5 flex items-start gap-2 rounded-xl bg-emerald-50/70 border border-emerald-200/70 p-3 text-xs text-emerald-950">
                   <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
                   <div>
                     <span className="font-bold text-emerald-900">Recommended Next Step: </span>
-                    <span>{rec.recommendedNextAction}</span>
+                    <span>{rec.recommendedNextStep}</span>
                   </div>
                 </div>
+
+                {/* How we calculated this toggle */}
+                <div className="mt-3 flex items-center justify-between text-[11px] pt-1 border-t border-slate-100">
+                  <button
+                    onClick={() => toggleMath(rec.id)}
+                    className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800 transition-colors font-medium"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5 text-slate-400" />
+                    <span>How we calculated this</span>
+                    {isMathOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  </button>
+                  <span className="text-slate-400 font-mono text-[10px]">Product: {rec.productName} ({rec.productId})</span>
+                </div>
+
+                {isMathOpen && (
+                  <div className="mt-2 rounded-lg bg-slate-50 border border-slate-200 p-2.5 text-xs text-slate-600 animate-in fade-in duration-100">
+                    <p className="font-semibold text-slate-800 mb-0.5">Calculation Formula & Data:</p>
+                    <p className="font-mono text-[11px] text-slate-700">{rec.howCalculated}</p>
+                  </div>
+                )}
               </div>
             );
           })

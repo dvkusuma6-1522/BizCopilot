@@ -3,113 +3,232 @@ import {
   BusinessAlert,
   AIRecommendation,
   ProductPerformance,
+  ActTodayItem,
+  WatchThisWeekItem,
+  DoingWellItem,
 } from './types';
-import { formatINR } from './analytics';
+import { formatINR, formatNumber } from './analytics';
 
-export function generateBusinessAlerts(
+// 1. ACT TODAY: Genuinely critical problems requiring immediate attention today
+export function generateActTodayItems(
   inventory: CalculatedInventoryItem[],
   productPerformance: ProductPerformance[]
-): BusinessAlert[] {
-  const alerts: BusinessAlert[] = [];
+): ActTodayItem[] {
+  const items: ActTodayItem[] = [];
 
-  // 1. Sales Decline Alert
-  const decliningProduct = productPerformance.find(
+  // A. Emergency Stockout Risk: Days of stock remaining < Supplier delivery time
+  const stockoutRiskItems = inventory.filter((i) => i.isStockoutRisk);
+  for (const item of stockoutRiskItems) {
+    items.push({
+      id: `act-stockout-${item.productId}`,
+      productId: item.productId,
+      productName: item.productName,
+      category: item.category,
+      headline: `Stock may run out before delivery`,
+      simpleExplanation: `You only have about ${item.daysOfCover} days of stock left, but your supplier takes ${item.supplierLeadDays} days to deliver. If you don't order now, you will have an empty shelf.`,
+      supportingNumbers: `Stock on hand: ${item.stockOnHand} units | Selling: ~${item.avgDailySales} units/day | Days left: ~${item.daysOfCover} days | Supplier delivery: ${item.supplierLeadDays} days`,
+      suggestedAction: `Call your supplier today and place an urgent order for ${item.recommendedReorderQty || item.reorderLevel} units.`,
+      howCalculated: `${item.stockOnHand} units in shop ÷ ${item.avgDailySales} daily demand = ${item.daysOfCover} days of stock left. This is less than the ${item.supplierLeadDays} days needed for delivery.`,
+      targetSection: 'inventory',
+    });
+  }
+
+  // B. Major Sales Collapse on a High-Volume Product (>25% drop on significant baseline)
+  const severeDrop = productPerformance.find(
     (p) => p.changePct !== undefined && p.changePct <= -25 && p.baselineUnits && p.baselineUnits > 20
   );
-
-  if (decliningProduct) {
-    alerts.push({
-      id: `alert-sales-${decliningProduct.productId}`,
-      severity: 'critical',
-      type: 'sales_decline',
-      title: 'Sudden Sales Drop Detected',
-      productId: decliningProduct.productId,
-      productName: decliningProduct.productName,
-      supportingData: `Sold ${decliningProduct.unitsSold} units vs ${decliningProduct.baselineUnits} units in the previous period (${decliningProduct.changePct}% drop).`,
-      recommendedAction: 'Check shelf visibility, recent price changes, or competitor discount activity.',
+  if (severeDrop) {
+    items.push({
+      id: `act-sales-drop-${severeDrop.productId}`,
+      productId: severeDrop.productId,
+      productName: severeDrop.productName,
+      category: severeDrop.category,
+      headline: `Sales have dropped more than usual`,
+      simpleExplanation: `${severeDrop.productName} sales dropped sharply by ${Math.abs(
+        severeDrop.changePct!
+      )}% compared with the previous baseline period.`,
+      supportingNumbers: `Current sales: ${severeDrop.unitsSold} units (vs ${severeDrop.baselineUnits} units in previous period). A drop of ${severeDrop.changePct}%.`,
+      suggestedAction: `Check if this product was out of stock on the shelf, if prices were changed, or if competitors ran a discount.`,
+      howCalculated: `Compared current period sales (${severeDrop.unitsSold} units) directly against the prior baseline period (${severeDrop.baselineUnits} units). Change = ((${severeDrop.unitsSold} - ${severeDrop.baselineUnits}) / ${severeDrop.baselineUnits}) × 100 = ${severeDrop.changePct}%.`,
       targetSection: 'sales',
     });
   }
 
-  // 2. Stockout Risk Alert
-  const stockoutRiskItem = inventory.find((item) => item.isStockoutRisk);
-  if (stockoutRiskItem) {
-    alerts.push({
-      id: `alert-stockout-${stockoutRiskItem.productId}`,
-      severity: 'critical',
-      type: 'stockout_risk',
-      title: 'Imminent Stockout Risk',
-      productId: stockoutRiskItem.productId,
-      productName: stockoutRiskItem.productName,
-      supportingData: `Stock on hand is ${stockoutRiskItem.stockOnHand} units (${stockoutRiskItem.daysOfCover} days cover), while supplier lead time is ${stockoutRiskItem.supplierLeadDays} days.`,
-      recommendedAction: `Place expedited replenishment order for ${stockoutRiskItem.recommendedReorderQty} units immediately.`,
-      targetSection: 'inventory',
-    });
-  }
-
-  // 3. Dead Stock Alert
-  const deadStockItem = inventory.find((item) => item.isDeadStock);
-  if (deadStockItem) {
-    alerts.push({
-      id: `alert-deadstock-${deadStockItem.productId}`,
-      severity: 'warning',
-      type: 'dead_stock',
-      title: 'Dead Stock Capital Tied Up',
-      productId: deadStockItem.productId,
-      productName: deadStockItem.productName,
-      supportingData: `${deadStockItem.stockOnHand} units unsold across recent weeks. Estimated cost tied up is ${formatINR(
-        deadStockItem.deadStockValue
-      )}.`,
-      recommendedAction: 'Create 15-20% bundle discount with top-selling snack or stop auto-restocking.',
-      targetSection: 'inventory',
-    });
-  }
-
-  // 4. Replenishment threshold alert (approaching reorder point)
-  const reorderWarningItem = inventory.find(
-    (item) => !item.isStockoutRisk && !item.isDeadStock && item.stockOnHand <= item.reorderLevel
-  );
-  if (reorderWarningItem) {
-    alerts.push({
-      id: `alert-reorder-${reorderWarningItem.productId}`,
-      severity: 'warning',
-      type: 'reorder_needed',
-      title: 'Reorder Threshold Reached',
-      productId: reorderWarningItem.productId,
-      productName: reorderWarningItem.productName,
-      supportingData: `Stock on hand (${reorderWarningItem.stockOnHand}) is at or below safety buffer (${reorderWarningItem.reorderLevel}).`,
-      recommendedAction: `Issue purchase order for ${reorderWarningItem.recommendedReorderQty} units before weekend surge.`,
-      targetSection: 'inventory',
-    });
-  }
-
-  return alerts;
+  return items;
 }
 
+// 2. WATCH THIS WEEK: Important issues to monitor or plan for, but not an emergency today
+export function generateWatchThisWeekItems(
+  inventory: CalculatedInventoryItem[],
+  productPerformance: ProductPerformance[]
+): WatchThisWeekItem[] {
+  const items: WatchThisWeekItem[] = [];
+
+  // A. Products nearing reorder point (Buffer is getting close)
+  const nearingReorder = inventory.filter(
+    (i) => !i.isStockoutRisk && !i.isDeadStock && (i.stockOnHand <= i.reorderLevel || i.daysOfCover <= i.supplierLeadDays * 1.5)
+  );
+  for (const item of nearingReorder) {
+    items.push({
+      id: `watch-reorder-${item.productId}`,
+      productId: item.productId,
+      productName: item.productName,
+      category: item.category,
+      headline: `Stock is getting low (nearing reorder point)`,
+      reason: `Current stock of ${item.stockOnHand} units is close to your safety level of ${item.reorderLevel} units. You have about ${item.daysOfCover} days of stock remaining.`,
+      supportingNumbers: `Stock on hand: ${item.stockOnHand} units | Reorder level: ${item.reorderLevel} units | Days left: ~${item.daysOfCover} days`,
+      recommendedAction: `Add ${item.recommendedReorderQty || item.reorderLevel} units to your regular supplier purchase order this week.`,
+      howCalculated: `Current stock (${item.stockOnHand}) is at or below the designated reorder threshold (${item.reorderLevel}).`,
+      targetSection: 'inventory',
+    });
+  }
+
+  // B. Money tied up in products that are not selling (Dead Stock)
+  const deadStockItems = inventory.filter((i) => i.isDeadStock);
+  for (const item of deadStockItems) {
+    items.push({
+      id: `watch-deadstock-${item.productId}`,
+      productId: item.productId,
+      productName: item.productName,
+      category: item.category,
+      headline: `Money tied up in products that are not selling`,
+      reason: `You have ${item.stockOnHand} units sitting on the shelf with only ${item.unitsSoldInPeriod} unit(s) sold recently. This is locking up ${formatINR(item.deadStockValue)} of your cash.`,
+      supportingNumbers: `Unsold stock: ${item.stockOnHand} units | Money tied up at cost: ${formatINR(item.deadStockValue)} | Retail value: ${formatINR(item.stockOnHand * item.retailPrice)}`,
+      recommendedAction: `Bundle this with a popular product at a discount, or avoid reordering until current boxes sell out.`,
+      howCalculated: `${item.stockOnHand} units unsold × unit cost of ${formatINR(item.unitCost)} = ${formatINR(item.deadStockValue)} tied up.`,
+      targetSection: 'inventory',
+    });
+  }
+
+  // C. Excess inventory accumulating (Overstocked)
+  const overstockedItems = inventory.filter((i) => i.isOverstocked);
+  for (const item of overstockedItems) {
+    items.push({
+      id: `watch-overstock-${item.productId}`,
+      productId: item.productId,
+      productName: item.productName,
+      category: item.category,
+      headline: `More stock than needed right now`,
+      reason: `You have about ${item.daysOfCover} days of stock on hand (${item.stockOnHand} units). This is more than double what your store normally needs.`,
+      supportingNumbers: `Current stock: ${item.stockOnHand} units | Days of supply: ~${item.daysOfCover} days | Daily sales: ~${item.avgDailySales} units/day`,
+      recommendedAction: `Pause new supplier orders for this item until stock levels drop back down to about 30 days of supply.`,
+      howCalculated: `${item.stockOnHand} units ÷ ${item.avgDailySales} sold/day = ${item.daysOfCover} days of supply. This exceeds the 45-day normal target.`,
+      targetSection: 'inventory',
+    });
+  }
+
+  // D. Moderate sales slowdown (10% to 24% drop)
+  const moderateDrops = productPerformance.filter(
+    (p) => p.changePct !== undefined && p.changePct <= -10 && p.changePct > -25
+  );
+  for (const item of moderateDrops) {
+    items.push({
+      id: `watch-drop-${item.productId}`,
+      productId: item.productId,
+      productName: item.productName,
+      category: item.category,
+      headline: `Sales are slightly slower than normal`,
+      reason: `Sales volume is down ${Math.abs(item.changePct!)}% compared with the previous baseline period.`,
+      supportingNumbers: `Sold ${item.unitsSold} units vs ${item.baselineUnits} units previously (${item.changePct}% change).`,
+      recommendedAction: `Keep an eye on this product this week to see if sales recover before ordering extra stock.`,
+      howCalculated: `Sales fell from ${item.baselineUnits} units to ${item.unitsSold} units in the same number of days.`,
+      targetSection: 'sales',
+    });
+  }
+
+  return items;
+}
+
+// 3. DOING WELL: Positive business signals
+export function generateDoingWellItems(
+  inventory: CalculatedInventoryItem[],
+  productPerformance: ProductPerformance[]
+): DoingWellItem[] {
+  const items: DoingWellItem[] = [];
+
+  // A. Top-selling revenue champions (Class A products)
+  const topRevenueProducts = productPerformance.filter((p) => p.abcClass === 'A').slice(0, 3);
+  for (const p of topRevenueProducts) {
+    const inv = inventory.find((i) => i.productId === p.productId);
+    items.push({
+      id: `well-top-${p.productId}`,
+      productId: p.productId,
+      productName: p.productName,
+      category: p.category,
+      headline: `Top Revenue Champion (Class A)`,
+      positiveSignal: `This is one of your shop's best earners, bringing in ${formatINR(p.revenue)} (${p.shareOfRevenue}% of your total shop sales).`,
+      supportingNumbers: `Revenue: ${formatINR(p.revenue)} | Units sold: ${formatNumber(p.unitsSold)} | Stock remaining: ${inv ? `${inv.daysOfCover} days` : 'Healthy'}`,
+      takeaway: `Keep this product prominently displayed on front shelves and always keep supplier deliveries on schedule.`,
+      targetSection: 'sales',
+    });
+  }
+
+  // B. Products with growing sales
+  const growingProducts = productPerformance
+    .filter((p) => p.changePct !== undefined && p.changePct >= 8)
+    .slice(0, 2);
+  for (const p of growingProducts) {
+    items.push({
+      id: `well-growing-${p.productId}`,
+      productId: p.productId,
+      productName: p.productName,
+      category: p.category,
+      headline: `Sales are growing (+${p.changePct}%)`,
+      positiveSignal: `Customer demand for this product is picking up. Sold ${p.unitsSold} units (up from ${p.baselineUnits} units in the prior period).`,
+      supportingNumbers: `Growth: +${p.changePct}% | Current units: ${p.unitsSold} | Prior units: ${p.baselineUnits}`,
+      takeaway: `Ensure you have enough supplier stock to meet this growing customer interest.`,
+      targetSection: 'sales',
+    });
+  }
+
+  // C. Perfectly balanced inventory items (Healthy cover > lead time + 7d)
+  const healthyItems = inventory
+    .filter((i) => i.status === 'healthy' && i.daysOfCover >= 10 && i.daysOfCover <= 35 && i.avgDailySales > 2)
+    .slice(0, 2);
+  for (const item of healthyItems) {
+    items.push({
+      id: `well-stock-${item.productId}`,
+      productId: item.productId,
+      productName: item.productName,
+      category: item.category,
+      headline: `Healthy Stock Level`,
+      positiveSignal: `You have about ${item.daysOfCover} days of stock left. This comfortably covers supplier delivery (${item.supplierLeadDays} days) without tying up excess cash.`,
+      supportingNumbers: `Stock on hand: ${item.stockOnHand} units | Selling: ~${item.avgDailySales} units/day | Supplier delivery: ${item.supplierLeadDays} days`,
+      takeaway: `No action needed right now. Everything is running smoothly.`,
+      targetSection: 'inventory',
+    });
+  }
+
+  return items;
+}
+
+// 4. Owner-Friendly AI Recommendations
 export function generateAIRecommendations(
   inventory: CalculatedInventoryItem[],
   productPerformance: ProductPerformance[]
 ): AIRecommendation[] {
   const recommendations: AIRecommendation[] = [];
 
-  // 1. Stockout Prevention Recommendations
+  // Stockout Prevention
   const stockoutItems = inventory.filter((i) => i.isStockoutRisk);
   for (const item of stockoutItems) {
     recommendations.push({
       id: `rec-stockout-${item.productId}`,
       priority: 'high',
       category: 'Stockout Prevention',
-      title: `Expedite Reorder for ${item.productName}`,
+      title: `Reorder ${item.productName}`,
       productId: item.productId,
       productName: item.productName,
-      reason: `Current stock of ${item.stockOnHand} will exhaust in ~${item.daysOfCover} days based on daily sales of ${item.avgDailySales} units/day. Supplier requires ${item.supplierLeadDays} days delivery window.`,
-      supportingEvidence: `Daily Velocity: ${item.avgDailySales} units/day | Cover: ${item.daysOfCover}d | Lead Time: ${item.supplierLeadDays}d | Stock on Hand: ${item.stockOnHand}`,
-      recommendedNextAction: `Contact supplier today and order ${item.recommendedReorderQty} units to prevent stockout loss.`,
+      whatIsHappening: `Current stock covers approximately ${item.daysOfCover} days of customer demand, but supplier delivery takes ${item.supplierLeadDays} days.`,
+      supportingNumbers: `Stock on hand: ${item.stockOnHand} units | Average daily sales: ${item.avgDailySales} units/day | Days left: ${item.daysOfCover} days | Supplier delivery: ${item.supplierLeadDays} days`,
+      whyOwnerShouldCare: `If you do not reorder now, customers won't find this item on your shelf, resulting in lost sales and frustrated regulars.`,
+      recommendedNextStep: `Place a replenishment order for ${item.recommendedReorderQty || item.reorderLevel} units with your supplier today.`,
+      howCalculated: `${item.stockOnHand} units ÷ ${item.avgDailySales} daily sales = ${item.daysOfCover} days remaining. Since ${item.daysOfCover} < ${item.supplierLeadDays} days delivery, stock will exhaust before the order arrives.`,
       targetSection: 'inventory',
     });
   }
 
-  // 2. Sales Decline Investigation Recommendations
+  // Sales Decline Investigation
   const decliningProducts = productPerformance.filter(
     (p) => p.changePct !== undefined && p.changePct <= -20 && p.baselineUnits && p.baselineUnits > 15
   );
@@ -121,67 +240,133 @@ export function generateAIRecommendations(
       title: `Investigate Sales Drop for ${item.productName}`,
       productId: item.productId,
       productName: item.productName,
-      reason: `Sales volume contracted by ${Math.abs(item.changePct!)}% from ${item.baselineUnits} units down to ${item.unitsSold} units. Pure sales data cannot identify customer churn cause.`,
-      supportingEvidence: `Current Units: ${item.unitsSold} | Baseline Units: ${item.baselineUnits} | Net Drop: ${item.changePct}% | Revenue Share: ${item.shareOfRevenue}%`,
-      recommendedNextAction: 'Inspect expiry dates, check if nearby competitor launched a discount, or reposition item to checkout counter.',
+      whatIsHappening: `Sales have dropped from ${item.baselineUnits} to ${item.unitsSold} units compared with the baseline period (${item.changePct}% drop).`,
+      supportingNumbers: `Current sales: ${item.unitsSold} units | Baseline sales: ${item.baselineUnits} units | Drop: ${item.changePct}% | Revenue share: ${item.shareOfRevenue}%`,
+      whyOwnerShouldCare: `This product is an important revenue contributor (${item.abcClass} rank). Sales data alone cannot tell you customer thoughts, but a sharp drop hurts total weekly profits.`,
+      recommendedNextStep: `Check product availability on shelves, verify if selling price was raised, check expiry dates, and see if nearby competitors launched promotions.`,
+      howCalculated: `((Current period ${item.unitsSold} units - Previous period ${item.baselineUnits} units) ÷ ${item.baselineUnits}) × 100 = ${item.changePct}%.`,
       targetSection: 'sales',
     });
   }
 
-  // 3. Dead Stock Reduction Recommendations
+  // Dead Stock Reduction
   const deadStockItems = inventory.filter((i) => i.isDeadStock);
   for (const item of deadStockItems) {
     recommendations.push({
       id: `rec-deadstock-${item.productId}`,
       priority: 'medium',
       category: 'Dead Stock Reduction',
-      title: `Liquidate Stagnant ${item.productName}`,
+      title: `Free Up Cash from ${item.productName}`,
       productId: item.productId,
       productName: item.productName,
-      reason: `No significant movement (${item.unitsSoldInPeriod} sold in period). ${item.stockOnHand} units occupying shelf capacity and locking up capital.`,
-      supportingEvidence: `Inventory Cost Locked: ${formatINR(item.deadStockValue)} | Units Held: ${item.stockOnHand} | Daily Sales: ${item.avgDailySales} units`,
-      recommendedNextAction: `Implement "Buy 1 Get 1 at 50% Off" or bundle with high-velocity product. Avoid auto-replenishment until cleared.`,
+      whatIsHappening: `Only ${item.unitsSoldInPeriod} unit(s) were sold recently. You have ${item.stockOnHand} units sitting in the shop.`,
+      supportingNumbers: `Money tied up at cost: ${formatINR(item.deadStockValue)} | Units on hand: ${item.stockOnHand} | Retail value: ${formatINR(item.stockOnHand * item.retailPrice)}`,
+      whyOwnerShouldCare: `Every rupee trapped in boxes that don't sell is cash you cannot use to buy fast-selling staples like milk, flour, or rice.`,
+      recommendedNextStep: `Offer a "Buy 1 Get 1 at 50% Off" deal or bundle it with a fast-selling staple item. Do not order more from your distributor.`,
+      howCalculated: `${item.stockOnHand} units in stock × ${formatINR(item.unitCost)} wholesale cost = ${formatINR(item.deadStockValue)} in idle cash.`,
       targetSection: 'inventory',
     });
   }
 
-  // 4. Overstock / Working Capital Optimization
+  // Overstock
   const overstockedItems = inventory.filter((i) => i.isOverstocked);
   for (const item of overstockedItems) {
     recommendations.push({
       id: `rec-overstock-${item.productId}`,
       priority: 'low',
       category: 'Replenishment',
-      title: `Defer Restocking for ${item.productName}`,
+      title: `Pause Restocking for ${item.productName}`,
       productId: item.productId,
       productName: item.productName,
-      reason: `Excessive buffer of ${item.daysOfCover} days of supply. Current stock (${item.stockOnHand}) exceeds required safety threshold by more than double.`,
-      supportingEvidence: `Days of Supply: ${item.daysOfCover} days | Daily Sales: ${item.avgDailySales} units/day | Holding Quantity: ${item.stockOnHand}`,
-      recommendedNextAction: 'Snooze automatic supplier reorders for next 3 weeks to liberate working capital.',
+      whatIsHappening: `You have about ${item.daysOfCover} days of stock (${item.stockOnHand} units), which is more than double your shop's safety buffer.`,
+      supportingNumbers: `Days of stock: ~${item.daysOfCover} days | Daily demand: ~${item.avgDailySales} units/day | Holding quantity: ${item.stockOnHand} units`,
+      whyOwnerShouldCare: `Storing extra boxes takes up shelf and storage room without bringing in extra customer sales.`,
+      recommendedNextStep: `Skip supplier reorders for the next 3 weeks until current stock drops down to about 30 days of supply.`,
+      howCalculated: `${item.stockOnHand} units ÷ ${item.avgDailySales} daily demand = ${item.daysOfCover} days of supply (>45 days limit).`,
       targetSection: 'inventory',
     });
   }
 
-  // 5. Replenishment for regular fast movers approaching reorder level
-  const fastMoversNeedingOrder = inventory.filter(
+  // Scheduled Replenishment
+  const reorderApproaching = inventory.filter(
     (i) => !i.isStockoutRisk && !i.isDeadStock && !i.isOverstocked && i.stockOnHand <= i.reorderLevel * 1.25
   );
-  for (const item of fastMoversNeedingOrder) {
+  for (const item of reorderApproaching) {
     recommendations.push({
       id: `rec-reorder-${item.productId}`,
       priority: 'medium',
       category: 'Replenishment',
-      title: `Scheduled Restock for ${item.productName}`,
+      title: `Plan Restock for ${item.productName}`,
       productId: item.productId,
       productName: item.productName,
-      reason: `Stock is within 25% of reorder threshold (${item.stockOnHand}/${item.reorderLevel}). Healthy velocity requires proactive replenishment.`,
-      supportingEvidence: `Current Stock: ${item.stockOnHand} | Reorder Point: ${item.reorderLevel} | Est. Cover: ${item.daysOfCover} days`,
-      recommendedNextAction: `Place standard supplier purchase order for ${item.recommendedReorderQty} units.`,
+      whatIsHappening: `Stock (${item.stockOnHand} units) is getting close to your safety reorder level (${item.reorderLevel} units).`,
+      supportingNumbers: `Current stock: ${item.stockOnHand} units | Reorder level: ${item.reorderLevel} units | Days left: ~${item.daysOfCover} days`,
+      whyOwnerShouldCare: `Proactive ordering keeps shelves full during busy weekend grocery rushes.`,
+      recommendedNextStep: `Include ${item.recommendedReorderQty || item.reorderLevel} units on your regular supplier order this week.`,
+      howCalculated: `Current stock (${item.stockOnHand}) is within 25% of the safety reorder point (${item.reorderLevel}).`,
       targetSection: 'inventory',
     });
   }
 
-  // Sort: high > medium > low
   const priorityOrder = { high: 0, medium: 1, low: 2 };
   return recommendations.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+}
+
+// 5. Business Alerts for legacy compatibility
+export function generateBusinessAlerts(
+  inventory: CalculatedInventoryItem[],
+  productPerformance: ProductPerformance[]
+): BusinessAlert[] {
+  const alerts: BusinessAlert[] = [];
+
+  const stockoutRiskItem = inventory.find((item) => item.isStockoutRisk);
+  if (stockoutRiskItem) {
+    alerts.push({
+      id: `alert-stockout-${stockoutRiskItem.productId}`,
+      severity: 'critical',
+      type: 'stockout_risk',
+      title: 'Stock may run out before delivery',
+      productId: stockoutRiskItem.productId,
+      productName: stockoutRiskItem.productName,
+      supportingData: `About ${stockoutRiskItem.daysOfCover} days of stock left (${stockoutRiskItem.stockOnHand} units), but delivery takes ${stockoutRiskItem.supplierLeadDays} days.`,
+      recommendedAction: `Order ${stockoutRiskItem.recommendedReorderQty || stockoutRiskItem.reorderLevel} units from your supplier today.`,
+      targetSection: 'inventory',
+    });
+  }
+
+  const decliningProduct = productPerformance.find(
+    (p) => p.changePct !== undefined && p.changePct <= -25 && p.baselineUnits && p.baselineUnits > 20
+  );
+  if (decliningProduct) {
+    alerts.push({
+      id: `alert-sales-${decliningProduct.productId}`,
+      severity: 'critical',
+      type: 'sales_decline',
+      title: 'Sales have dropped more than usual',
+      productId: decliningProduct.productId,
+      productName: decliningProduct.productName,
+      supportingData: `Sold ${decliningProduct.unitsSold} units vs ${decliningProduct.baselineUnits} units previously (${decliningProduct.changePct}% drop).`,
+      recommendedAction: 'Check shelf visibility, pricing changes, or competitor discount activity.',
+      targetSection: 'sales',
+    });
+  }
+
+  const deadStockItem = inventory.find((item) => item.isDeadStock);
+  if (deadStockItem) {
+    alerts.push({
+      id: `alert-deadstock-${deadStockItem.productId}`,
+      severity: 'warning',
+      type: 'dead_stock',
+      title: 'Money tied up in products that are not selling',
+      productId: deadStockItem.productId,
+      productName: deadStockItem.productName,
+      supportingData: `${deadStockItem.stockOnHand} units unsold. Estimated money tied up at cost is ${formatINR(
+        deadStockItem.deadStockValue
+      )}.`,
+      recommendedAction: 'Put on discount, create a bundle deal, or pause future orders.',
+      targetSection: 'inventory',
+    });
+  }
+
+  return alerts;
 }

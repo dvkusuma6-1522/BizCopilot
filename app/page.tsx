@@ -22,7 +22,9 @@ import {
   formatNumber,
 } from '@/lib/analytics';
 import {
-  generateBusinessAlerts,
+  generateActTodayItems,
+  generateWatchThisWeekItems,
+  generateDoingWellItems,
   generateAIRecommendations,
 } from '@/lib/recommendation-engine';
 import {
@@ -38,9 +40,10 @@ import { Header } from '@/components/layout/Header';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { SalesTrendChart } from '@/components/dashboard/SalesTrendChart';
 import { ProductPerformanceChart } from '@/components/dashboard/ProductPerformanceChart';
-import { BusinessAlerts } from '@/components/dashboard/BusinessAlerts';
 import { HealthSummaryCard } from '@/components/dashboard/HealthSummaryCard';
-import { RecommendationPreview } from '@/components/dashboard/RecommendationPreview';
+import { ActTodaySection } from '@/components/dashboard/ActTodaySection';
+import { WatchThisWeekSection } from '@/components/dashboard/WatchThisWeekSection';
+import { DoingWellSection } from '@/components/dashboard/DoingWellSection';
 
 import { SalesView } from '@/components/sales/SalesView';
 import { InventoryView } from '@/components/inventory/InventoryView';
@@ -56,6 +59,7 @@ import {
   Sparkles,
   ArrowRight,
   Store,
+  LineChart,
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -99,8 +103,17 @@ export default function HomePage() {
     return getProductPerformance(salesRecords, periodDays);
   }, [salesRecords, periodDays]);
 
-  const businessAlerts = useMemo(() => {
-    return generateBusinessAlerts(inventoryMetrics, productPerformance);
+  // Redesigned 3 Prominent Business Sections
+  const actTodayItems = useMemo(() => {
+    return generateActTodayItems(inventoryMetrics, productPerformance);
+  }, [inventoryMetrics, productPerformance]);
+
+  const watchThisWeekItems = useMemo(() => {
+    return generateWatchThisWeekItems(inventoryMetrics, productPerformance);
+  }, [inventoryMetrics, productPerformance]);
+
+  const doingWellItems = useMemo(() => {
+    return generateDoingWellItems(inventoryMetrics, productPerformance);
   }, [inventoryMetrics, productPerformance]);
 
   const aiRecommendations = useMemo(() => {
@@ -134,12 +147,11 @@ export default function HomePage() {
   };
 
   if (!isMounted) {
-    // Avoid hydration layout mismatch by rendering a clean loading shell
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-500 text-sm">
         <div className="flex items-center gap-2">
           <span className="h-4 w-4 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin" />
-          <span>Initializing BizCopilot Advisor...</span>
+          <span>Opening BizCopilot Advisor...</span>
         </div>
       </div>
     );
@@ -153,7 +165,7 @@ export default function HomePage() {
         setActiveTab={setActiveTab}
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
-        stockoutCount={periodSummary.stockoutRiskCount}
+        stockoutCount={actTodayItems.length}
         recommendationCount={aiRecommendations.length}
       />
 
@@ -170,10 +182,10 @@ export default function HomePage() {
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          {/* TAB 1: OVERVIEW DASHBOARD */}
+          {/* TAB 1: REDESIGNED OVERVIEW DASHBOARD */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Demo Store Context Banner */}
+              {/* Store Context Banner */}
               <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
@@ -188,7 +200,7 @@ export default function HomePage() {
                         </span>
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        {STORE_TYPE} • {STORE_LOCATION} • Reporting Window: {periodSummary.startDate} to {periodSummary.endDate} ({periodDays} days)
+                        {STORE_TYPE} • {STORE_LOCATION} • Reporting: {periodSummary.startDate} to {periodSummary.endDate} ({periodDays} days)
                       </p>
                     </div>
                   </div>
@@ -196,7 +208,7 @@ export default function HomePage() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setActiveTab('copilot')}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition-all"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-slate-800 transition-all active:scale-[0.98]"
                     >
                       <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
                       <span>Ask Copilot Today&apos;s Actions</span>
@@ -206,34 +218,34 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {/* 4 Primary Executive Metric Cards */}
+              {/* 4 Owner-Friendly Metric Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
-                  title="Total Revenue"
+                  title="Total Shop Sales"
                   value={formatINR(periodSummary.totalRevenue)}
                   changePct={periodSummary.revenueChangePct}
                   comparisonLabel={`vs previous ${periodDays}d`}
                   icon={IndianRupee}
                   iconColor="text-emerald-700"
                   iconBg="bg-emerald-50"
-                  tooltip="Total sales receipts across the selected period. Compares with an identical previous window."
+                  tooltip="Total revenue received over the selected period. How we calculated this: sum of (units sold × selling price) across all days."
                 />
 
                 <MetricCard
-                  title="Units Sold"
+                  title="Total Items Sold"
                   value={formatNumber(periodSummary.totalUnitsSold)}
                   changePct={periodSummary.unitsChangePct}
                   comparisonLabel={`vs previous ${periodDays}d`}
                   icon={ShoppingBag}
                   iconColor="text-teal-700"
                   iconBg="bg-teal-50"
-                  tooltip="Total physical quantity of grocery items sold across the analysis period."
+                  tooltip="Total physical quantity of grocery packets sold in this period."
                 />
 
                 <MetricCard
-                  title="Stockout Risk"
-                  value={`${periodSummary.stockoutRiskCount} Product${periodSummary.stockoutRiskCount === 1 ? '' : 's'}`}
-                  statusBadge={periodSummary.stockoutRiskCount > 0 ? 'Urgent Reorder' : 'All Protected'}
+                  title="Stockout Risks"
+                  value={`${periodSummary.stockoutRiskCount} ${periodSummary.stockoutRiskCount === 1 ? 'Product' : 'Products'}`}
+                  statusBadge={periodSummary.stockoutRiskCount > 0 ? 'Urgent Order' : 'All Protected'}
                   badgeColor={
                     periodSummary.stockoutRiskCount > 0
                       ? 'bg-rose-100 text-rose-800'
@@ -242,16 +254,16 @@ export default function HomePage() {
                   icon={AlertTriangle}
                   iconColor={periodSummary.stockoutRiskCount > 0 ? 'text-rose-600' : 'text-emerald-600'}
                   iconBg={periodSummary.stockoutRiskCount > 0 ? 'bg-rose-50' : 'bg-emerald-50'}
-                  tooltip="Products where current stock cover in days is less than distributor delivery lead time."
+                  tooltip="Products where current stock left will run out before supplier delivery arrives."
                 />
 
                 <MetricCard
-                  title="Dead Stock Value"
+                  title="Money in Unsold Stock"
                   value={formatINR(periodSummary.deadStockTotalCost)}
                   statusBadge={
                     periodSummary.deadStockCount > 0
-                      ? `${periodSummary.deadStockCount} SKU(s) Slow`
-                      : 'High Velocity'
+                      ? `${periodSummary.deadStockCount} SKU(s) Idle`
+                      : 'Fast Moving'
                   }
                   badgeColor={
                     periodSummary.deadStockCount > 0
@@ -261,27 +273,49 @@ export default function HomePage() {
                   icon={PackageX}
                   iconColor="text-amber-600"
                   iconBg="bg-amber-50"
-                  tooltip="Capital tied up in products with zero or near-zero sales over recent weeks (calculated at unit cost)."
+                  tooltip="Cash tied up in products with zero or near-zero sales recently. Calculated using wholesale unit cost × stock quantity."
                 />
               </div>
 
-              {/* Charts Section: Sales Trend & Top Contribution */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <SalesTrendChart data={salesTrend} periodDays={periodDays} />
-                <ProductPerformanceChart products={productPerformance} />
-              </div>
+              {/* SECTION 1: ACT TODAY (Critical emergencies) */}
+              <ActTodaySection items={actTodayItems} onNavigate={handleNavigate} />
 
-              {/* Business Health Summary Scorecard */}
+              {/* SECTION 2: WATCH THIS WEEK (Decisions needed this week) */}
+              <WatchThisWeekSection items={watchThisWeekItems} onNavigate={handleNavigate} />
+
+              {/* SECTION 3: DOING WELL (Positive business signals) */}
+              <DoingWellSection items={doingWellItems} onNavigate={handleNavigate} />
+
+              {/* Business Health Scorecard */}
               <HealthSummaryCard summary={periodSummary} />
 
-              {/* Critical Business Alerts */}
-              <BusinessAlerts alerts={businessAlerts} onNavigate={handleNavigate} />
+              {/* Visual Analytics Trends & Top Contribution */}
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                      <LineChart className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">Store Performance & Trends</h3>
+                      <p className="text-xs text-slate-500">Daily turnover patterns and highest earning product lines</p>
+                    </div>
+                  </div>
 
-              {/* Top AI Recommendations Preview */}
-              <RecommendationPreview
-                recommendations={aiRecommendations}
-                onNavigate={handleNavigate}
-              />
+                  <button
+                    onClick={() => setActiveTab('sales')}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+                  >
+                    <span>Detailed Sales Analytics</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <SalesTrendChart data={salesTrend} periodDays={periodDays} />
+                  <ProductPerformanceChart products={productPerformance} />
+                </div>
+              </div>
             </div>
           )}
 

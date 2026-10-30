@@ -88,7 +88,7 @@ export const RecommendationPreview: React.FC<RecommendationPreviewProps> = ({
                       {rec.category}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-slate-600 line-clamp-1">{rec.reason}</p>
+                  <p className="mt-1 text-xs text-slate-600 line-clamp-1">{rec.whatIsHappening}</p>
                 </div>
               </div>
 
