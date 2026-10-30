@@ -1,9 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Menu, Calendar, RotateCcw, Bot } from 'lucide-react';
+import { Menu, Calendar, RotateCcw, Bot, ShieldCheck, Sparkles, Globe, Settings } from 'lucide-react';
 import { ActiveTab } from '@/lib/types';
 import { STORE_NAME } from '@/lib/demo-data';
+import { SupportedLanguage, translations } from '@/lib/i18n';
+import { formatINR } from '@/lib/analytics';
+import { CategoryConfig } from '@/lib/categories/types';
+import { CategoryIcon } from '@/components/categories/CategoryIcon';
 
 interface HeaderProps {
   activeTab: ActiveTab;
@@ -13,6 +17,17 @@ interface HeaderProps {
   onResetData: () => void;
   setMobileOpen: (open: boolean) => void;
   isCustomData: boolean;
+  mode: 'owner' | 'analyst';
+  setMode: (mode: 'owner' | 'analyst') => void;
+  lang: SupportedLanguage;
+  setLang: (lang: SupportedLanguage) => void;
+  moneySaved: number;
+  onOpenMoneySaved: () => void;
+  onOpenTour: () => void;
+  onOpenSettings?: () => void;
+  category?: CategoryConfig;
+  onOpenCategoryPicker?: () => void;
+  businessName?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -23,38 +38,56 @@ export const Header: React.FC<HeaderProps> = ({
   onResetData,
   setMobileOpen,
   isCustomData,
+  mode,
+  setMode,
+  lang,
+  setLang,
+  moneySaved,
+  onOpenMoneySaved,
+  onOpenTour,
+  onOpenSettings,
+  category,
+  onOpenCategoryPicker,
+  businessName,
 }) => {
+  const t = translations[lang] || translations.en;
+  const activeStoreName = businessName || STORE_NAME;
+
   const titles: Record<ActiveTab, { title: string; subtitle: string }> = {
     overview: {
-      title: 'Store Performance Overview',
-      subtitle: `Executive summary & proactive alerts for ${STORE_NAME}`,
+      title: t.brandName,
+      subtitle: `${t.tagline} • ${activeStoreName}`,
     },
     sales: {
-      title: 'Sales Intelligence & Velocity',
+      title: t.navSales,
       subtitle: 'Analyze revenue dynamics, detect drops, and track product movement',
     },
     inventory: {
-      title: 'Inventory & Stock Cover',
+      title: t.navInventory,
       subtitle: 'Days of supply, supplier delivery lead-time buffers, and dead-stock identification',
     },
     recommendations: {
-      title: 'AI Advisor Recommendations',
+      title: t.navRecommendations,
       subtitle: 'Deterministic, prioritized operational decisions to protect profit & cash flow',
     },
     copilot: {
-      title: 'BizCopilot Assistant',
+      title: t.navCopilot,
       subtitle: 'Ask natural questions about sales trends, reorders, and inventory decisions',
     },
+    calendar: {
+      title: t.calendarTitle,
+      subtitle: t.calendarSubtitle,
+    },
     import: {
-      title: 'Data Import & CSV Management',
-      subtitle: 'Upload transaction CSVs or review active data structure',
+      title: t.navImport,
+      subtitle: 'Upload transaction CSVs/Excel or review active data structure',
     },
   };
 
   const current = titles[activeTab] || titles.overview;
 
   return (
-    <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-30 flex min-h-18 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur-md sm:px-6 lg:px-8 py-2.5">
       {/* Left: Mobile Toggle & Page Header */}
       <div className="flex items-center gap-3">
         <button
@@ -66,23 +99,91 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         <div>
-          <h1 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
+          <h1 className="text-base font-bold tracking-tight text-slate-900 sm:text-lg">
             {current.title}
           </h1>
           <p className="hidden text-xs text-slate-500 sm:block">{current.subtitle}</p>
         </div>
       </div>
 
-      {/* Right: Period Selector & Action Badges */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      {/* Right: Controls & Actions */}
+      <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
+        {/* Money Saved Counter Pill (Owner Mode highlight) */}
+        {moneySaved > 0 && (
+          <button
+            onClick={onOpenMoneySaved}
+            className="flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-300 px-3 py-1 text-xs font-bold text-emerald-800 shadow-xs hover:bg-emerald-100 transition-all"
+            title="Click to view Money Saved calculation"
+          >
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+            <span>{t.moneySaved}:</span>
+            <span className="text-emerald-900 font-extrabold">{formatINR(moneySaved)}</span>
+          </button>
+        )}
+
+        {/* Category Badge & Switcher */}
+        {category && (
+          <button
+            onClick={onOpenCategoryPicker}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-800 transition-all shadow-xs"
+            title="Switch Business Type"
+          >
+            <CategoryIcon iconName={category.icon} className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="hidden md:inline font-bold">
+              {category.labels[lang] || category.labels.en}
+            </span>
+            <span className="rounded-full bg-slate-100 px-1.5 py-0.2 text-[9px] font-bold text-slate-600 border border-slate-200">
+              Switch
+            </span>
+          </button>
+        )}
+
+        {/* Mode Toggle: Owner Mode vs Analyst Mode */}
+        <div className="hidden sm:flex items-center rounded-xl border border-slate-200 bg-slate-100/80 p-0.5">
+          <button
+            onClick={() => setMode('owner')}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
+              mode === 'owner'
+                ? 'bg-white text-slate-900 shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {t.ownerMode.split(' ')[0]}
+          </button>
+          <button
+            onClick={() => setMode('analyst')}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
+              mode === 'analyst'
+                ? 'bg-white text-slate-900 shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {t.analystMode.split(' ')[0]}
+          </button>
+        </div>
+
+        {/* Language Selector */}
+        <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <Globe className="h-3.5 w-3.5 text-slate-400 ml-1 mr-0.5" />
+          <select
+            value={lang}
+            onChange={(e) => setLang(e.target.value as SupportedLanguage)}
+            className="bg-transparent text-xs font-bold text-slate-700 focus:outline-hidden cursor-pointer"
+          >
+            <option value="en">EN</option>
+            <option value="kn">ಕನ್ನಡ</option>
+            <option value="hi">हिन्दी</option>
+          </select>
+        </div>
+
         {/* Dataset Origin Badge */}
         <div className="hidden items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 md:flex">
           <span className={`h-2 w-2 rounded-full ${isCustomData ? 'bg-blue-500' : 'bg-emerald-500'}`} />
-          <span>{isCustomData ? 'Custom CSV Data' : 'Sample Store Data'}</span>
+          <span>{isCustomData ? t.customData : t.sampleData}</span>
           {isCustomData && (
             <button
               onClick={onResetData}
-              title="Reset to FreshMart sample data"
+              title={t.resetDemo}
               className="ml-1 text-slate-400 hover:text-red-500 transition-colors"
             >
               <RotateCcw className="h-3 w-3" />
@@ -95,7 +196,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50/90 p-1 shadow-xs">
             <span className="hidden px-2 text-xs font-medium text-slate-400 sm:inline-flex items-center gap-1">
               <Calendar className="h-3.5 w-3.5" />
-              Period:
+              {t.periodSelector}:
             </span>
             <div className="flex items-center gap-0.5">
               {[7, 14, 30].map((days) => (
@@ -104,7 +205,7 @@ export const Header: React.FC<HeaderProps> = ({
                   onClick={() => setPeriodDays(days)}
                   className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
                     periodDays === days
-                      ? 'bg-white text-emerald-800 shadow-xs border border-slate-200/60'
+                      ? 'bg-white text-emerald-800 shadow-xs border border-slate-200/60 font-bold'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -115,14 +216,47 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
+        {/* Quick Calendar Button */}
+        <button
+          onClick={() => setActiveTab('calendar')}
+          className={`rounded-xl border p-2 transition-colors ${
+            activeTab === 'calendar'
+              ? 'border-purple-300 bg-purple-50 text-purple-700'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+          title={t.navCalendar}
+        >
+          <Calendar className="h-4 w-4" />
+        </button>
+
+        {/* Quick Tour Button */}
+        <button
+          onClick={onOpenTour}
+          className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 hover:text-slate-900 hidden sm:flex"
+          title="Setup & Quick Guide"
+        >
+          <Sparkles className="h-4 w-4 text-emerald-600" />
+        </button>
+
+        {/* Settings Button */}
+        {onOpenSettings && (
+          <button
+            onClick={onOpenSettings}
+            className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            title={t.settingsTitle}
+          >
+            <Settings className="h-4 w-4 text-slate-600" />
+          </button>
+        )}
+
         {/* Quick Ask Copilot Button if not on Copilot */}
         {activeTab !== 'copilot' && (
           <button
             onClick={() => setActiveTab('copilot')}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm shadow-emerald-600/20 hover:bg-emerald-700 transition-all active:scale-[0.98]"
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-emerald-600/20 hover:bg-emerald-700 transition-all active:scale-[0.98]"
           >
             <Bot className="h-4 w-4" />
-            <span className="hidden sm:inline">Ask Copilot</span>
+            <span className="hidden sm:inline">{t.askCopilotBtn}</span>
           </button>
         )}
       </div>

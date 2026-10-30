@@ -2,31 +2,40 @@
 
 import React, { useState } from 'react';
 import { CalculatedInventoryItem, InventoryStatus, ActiveTab, ABCClass } from '@/lib/types';
-import { formatINR, formatNumber } from '@/lib/analytics';
+import { formatNumber } from '@/lib/analytics';
 import {
   Search,
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
   ArrowUpDown,
-  X,
-  HelpCircle,
-  PackageX,
+  Sliders,
+  MessageSquare,
 } from 'lucide-react';
+import { InventoryDrawer } from './InventoryDrawer';
+import { SupportedLanguage, translations } from '@/lib/i18n';
+import { CategoryConfig } from '@/lib/categories/types';
 
 interface InventoryViewProps {
   inventory: CalculatedInventoryItem[];
   periodDays: number;
   highlightProductId?: string;
-  onNavigate: (tab: ActiveTab, productId?: string) => void;
+  onNavigate?: (tab: ActiveTab, productId?: string) => void;
+  lang?: SupportedLanguage;
+  storeName?: string;
+  category?: CategoryConfig;
 }
 
 export const InventoryView: React.FC<InventoryViewProps> = ({
   inventory,
   periodDays,
   highlightProductId,
-  onNavigate,
+  lang = 'en',
+  storeName = 'FreshMart Grocery',
+  category,
 }) => {
+  const t = translations[lang] || translations.en;
+  const gridFields = category?.productFields?.filter((f) => f.isGridColumn) || [];
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | InventoryStatus>('all');
   const [categoryFilter, setCategoryFilter] = useState('All');
@@ -96,9 +105,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     }
   };
 
-  // Stockout risk items
   const stockoutItems = inventory.filter((i) => i.isStockoutRisk);
-  // Dead stock items
   const deadStockItems = inventory.filter((i) => i.isDeadStock);
 
   return (
@@ -106,7 +113,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       {/* Overview Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Inventory & Stock Cover Intelligence</h2>
+          <h2 className="text-lg font-bold text-slate-900">{t.navInventory}</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Days of stock remaining calculated using daily customer demand over the last {periodDays} days
           </p>
@@ -139,27 +146,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               {stockoutItems.map((item) => (
                 <p key={item.productId} className="mt-1 text-xs text-rose-900 font-medium">
                   • <strong>{item.productName}:</strong> Approximately <strong>{item.daysOfCover} days of stock left</strong> ({item.stockOnHand} units on hand), while supplier delivery takes <strong>{item.supplierLeadDays} days</strong>.
-                </p>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Dead Stock Money Tied Up Warning */}
-      {deadStockItems.length > 0 && (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50/50 p-4 shadow-xs">
-          <div className="flex items-start gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-white">
-              <PackageX className="h-4 w-4" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-amber-950">
-                Money tied up in products that are not selling:
-              </h3>
-              {deadStockItems.map((item) => (
-                <p key={item.productId} className="mt-1 text-xs text-amber-900 font-medium">
-                  • <strong>{item.productName}:</strong> {item.stockOnHand} units sitting in shop with only {item.unitsSoldInPeriod} unit(s) sold recently. <strong>{formatINR(item.deadStockValue)}</strong> tied up at cost ({formatINR(item.stockOnHand * item.retailPrice)} retail value).
                 </p>
               ))}
             </div>
@@ -245,6 +231,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     Category <ArrowUpDown className="h-3 w-3" />
                   </div>
                 </th>
+                {gridFields.map((f) => (
+                  <th key={f.key} className="py-3.5 px-3 text-left">
+                    {f.label[lang] || f.label.en}
+                  </th>
+                ))}
                 <th className="py-3.5 text-center">ABC Rank</th>
                 <th
                   onClick={() => handleSort('stockOnHand')}
@@ -279,7 +270,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   </div>
                 </th>
                 <th className="py-3.5 text-center">Status</th>
-                <th className="py-3.5 pr-4 text-right">Details</th>
+                <th className="py-3.5 pr-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -287,6 +278,21 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 const badge = getStatusBadge(item.status);
                 const Icon = badge.icon;
                 const isHighlighted = item.productId === highlightProductId;
+
+                const whatsappMsg = category?.whatsappTemplates?.order
+                  ? category.whatsappTemplates.order(
+                      storeName,
+                      item.productName,
+                      item.recommendedReorderQty || 30,
+                      item.attributes,
+                      lang
+                    )
+                  : t.whatsappOrderMessage(
+                      storeName,
+                      item.productName,
+                      item.recommendedReorderQty || 30
+                    );
+                const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappMsg)}`;
 
                 return (
                   <tr
@@ -307,6 +313,22 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         {item.category}
                       </span>
                     </td>
+                    {gridFields.map((f) => {
+                      const rawVal = item.attributes?.[f.key];
+                      const displayVal =
+                        rawVal !== undefined && rawVal !== ''
+                          ? f.format
+                            ? f.format(rawVal)
+                            : String(rawVal)
+                          : '—';
+                      return (
+                        <td key={f.key} className="py-3.5 px-3">
+                          <span className="font-mono text-[11px] font-semibold text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded-md border border-slate-200/60">
+                            {displayVal}
+                          </span>
+                        </td>
+                      );
+                    })}
                     <td className="py-3.5 text-center">
                       <span
                         className={`inline-block rounded-md px-1.5 py-0.2 text-[10px] font-bold ${
@@ -351,15 +373,28 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                       </span>
                     </td>
                     <td className="py-3.5 pr-4 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedProduct(item);
-                        }}
-                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-xs hover:border-emerald-400 hover:text-emerald-800 hover:bg-emerald-50 transition-all"
-                      >
-                        Inspect
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <a
+                          href={whatsappUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Draft order on WhatsApp"
+                          className="rounded-lg border border-emerald-200 bg-emerald-50 p-1 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 transition-colors"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                        </a>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProduct(item);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-xs hover:border-emerald-400 hover:text-emerald-800 hover:bg-emerald-50 transition-all"
+                        >
+                          <Sliders className="h-3 w-3 text-emerald-600" />
+                          <span>Inspect</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -370,153 +405,18 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
         <div className="p-3 bg-slate-50/60 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
           <span>Showing {filteredItems.length} of {inventory.length} store products</span>
-          <span className="italic">Click any row to inspect simple countdowns and how stock cover was calculated</span>
+          <span className="italic">Click any row to open the interactive &quot;What-If&quot; Depletion Simulator</span>
         </div>
       </div>
 
-      {/* Product Detail Modal */}
-      {selectedProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-bold text-slate-900">{selectedProduct.productName}</h3>
-                  <span
-                    className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                      getStatusBadge(selectedProduct.status).badge
-                    }`}
-                  >
-                    {getStatusBadge(selectedProduct.status).label}
-                  </span>
-                  <span className="rounded-md bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 text-[10px]">
-                    Class {selectedProduct.abcClass || 'B'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5 font-mono">
-                  Product ID: {selectedProduct.productId} • Category: {selectedProduct.category}
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedProduct(null)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Calculations Breakdown */}
-            <div className="mt-4 space-y-4">
-              {/* Simple Owner-Friendly Summary */}
-              <div
-                className={`rounded-xl border p-3.5 text-xs ${
-                  selectedProduct.isStockoutRisk
-                    ? 'border-rose-200 bg-rose-50 text-rose-950 font-medium'
-                    : selectedProduct.isDeadStock
-                    ? 'border-amber-200 bg-amber-50 text-amber-950 font-medium'
-                    : 'border-emerald-200 bg-emerald-50 text-emerald-950 font-medium'
-                }`}
-              >
-                <div className="font-bold text-sm mb-1">
-                  {selectedProduct.isStockoutRisk
-                    ? '⚠️ Stock may run out before delivery!'
-                    : selectedProduct.isDeadStock
-                    ? '📦 Money tied up in unsold stock'
-                    : '✅ Stock levels are healthy'}
-                </div>
-                <p className="leading-relaxed">{selectedProduct.friendlyStatusText}</p>
-                <div className="mt-2 pt-2 border-t border-black/10">
-                  <strong>Recommended Next Step:</strong> {selectedProduct.suggestedAction}
-                </div>
-              </div>
-
-              {/* How We Calculated This */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5">
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <HelpCircle className="h-3.5 w-3.5 text-emerald-600" />
-                  How we calculated this
-                </h4>
-                <div className="space-y-2 text-xs text-slate-700">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Average Daily Demand:</span>
-                    <span className="font-semibold text-slate-900">
-                      {selectedProduct.unitsSoldInPeriod} units sold ÷ {periodDays} days ={' '}
-                      <strong className="text-emerald-700">{selectedProduct.avgDailySales} units/day</strong>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Days of Stock Left:</span>
-                    <span className="font-semibold text-slate-900">
-                      {selectedProduct.stockOnHand} stock ÷ {selectedProduct.avgDailySales} daily demand ={' '}
-                      <strong
-                        className={
-                          selectedProduct.isStockoutRisk ? 'text-rose-700' : 'text-slate-900'
-                        }
-                      >
-                        {selectedProduct.daysOfCover >= 900 ? 'No sales' : `About ${selectedProduct.daysOfCover} days`}
-                      </strong>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Supplier Delivery Time:</span>
-                    <span className="font-semibold text-slate-900">
-                      Takes <strong>{selectedProduct.supplierLeadDays} days</strong> for next delivery to arrive
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Financial Snapshot */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-slate-200/70 p-3 bg-white">
-                  <span className="text-[11px] font-semibold text-slate-500 uppercase">Unit Economics</span>
-                  <div className="mt-1 text-xs space-y-0.5">
-                    <div>Retail Selling Price: <strong>{formatINR(selectedProduct.retailPrice)}</strong></div>
-                    <div>Wholesale Unit Cost: <strong>{formatINR(selectedProduct.unitCost)}</strong></div>
-                    <div className="text-emerald-700 font-medium">
-                      Profit per Unit: {formatINR(selectedProduct.retailPrice - selectedProduct.unitCost)} (
-                      {(
-                        ((selectedProduct.retailPrice - selectedProduct.unitCost) /
-                          selectedProduct.retailPrice) *
-                        100
-                      ).toFixed(0)}
-                      % margin)
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200/70 p-3 bg-white">
-                  <span className="text-[11px] font-semibold text-slate-500 uppercase">Cash Locked</span>
-                  <div className="mt-1 text-xs space-y-0.5">
-                    <div>Stock on Hand: <strong>{selectedProduct.stockOnHand} units</strong></div>
-                    <div>Inventory at Cost: <strong>{formatINR(selectedProduct.stockOnHand * selectedProduct.unitCost)}</strong></div>
-                    <div className="text-slate-500">Retail Value: {formatINR(selectedProduct.stockOnHand * selectedProduct.retailPrice)}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center justify-between pt-3 border-t border-slate-100">
-              <button
-                onClick={() => {
-                  setSelectedProduct(null);
-                  onNavigate('copilot');
-                }}
-                className="text-xs font-semibold text-emerald-700 hover:text-emerald-800"
-              >
-                Ask Copilot about {selectedProduct.productName} →
-              </button>
-
-              <button
-                onClick={() => setSelectedProduct(null)}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-              >
-                Close Window
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Interactive Inventory Drawer */}
+      <InventoryDrawer
+        product={selectedProduct}
+        onClose={() => setSelectedProduct(null)}
+        lang={lang}
+        storeName={storeName}
+        category={category}
+      />
     </div>
   );
 };

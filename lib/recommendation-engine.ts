@@ -6,13 +6,20 @@ import {
   ActTodayItem,
   WatchThisWeekItem,
   DoingWellItem,
+  SalesRecord,
 } from './types';
 import { formatINR, formatNumber } from './analytics';
+import { CategoryConfig } from './categories/types';
+import { SupportedLanguage } from './i18n';
 
 // 1. ACT TODAY: Genuinely critical problems requiring immediate attention today
 export function generateActTodayItems(
   inventory: CalculatedInventoryItem[],
-  productPerformance: ProductPerformance[]
+  productPerformance: ProductPerformance[],
+  category?: CategoryConfig,
+  lang: SupportedLanguage = 'en',
+  sales: SalesRecord[] = [],
+  periodDays: number = 14
 ): ActTodayItem[] {
   const items: ActTodayItem[] = [];
 
@@ -54,13 +61,44 @@ export function generateActTodayItems(
     });
   }
 
+  // C. Category Domain Alert Rules for Act Today
+  if (category?.alertRules) {
+    for (const rule of category.alertRules) {
+      try {
+        const results = rule.evaluate({ inventory, sales, periodDays });
+        for (const res of results) {
+          if (res.triggered && res.section === 'today') {
+            items.push({
+              id: `cat-today-${rule.id}-${res.productId || 'store'}`,
+              productId: res.productId || 'CAT-ALERT',
+              productName: res.productName || category.labels[lang] || category.labels.en,
+              category: category.labels[lang] || category.labels.en,
+              headline: res.headline[lang] || res.headline.en,
+              simpleExplanation: res.explanation[lang] || res.explanation.en,
+              supportingNumbers: res.supportingData,
+              suggestedAction: res.suggestedAction[lang] || res.suggestedAction.en,
+              howCalculated: res.supportingData,
+              targetSection: 'inventory',
+            });
+          }
+        }
+      } catch (e) {
+        console.warn(`Category rule ${rule.id} evaluation error:`, e);
+      }
+    }
+  }
+
   return items;
 }
 
 // 2. WATCH THIS WEEK: Important issues to monitor or plan for, but not an emergency today
 export function generateWatchThisWeekItems(
   inventory: CalculatedInventoryItem[],
-  productPerformance: ProductPerformance[]
+  productPerformance: ProductPerformance[],
+  category?: CategoryConfig,
+  lang: SupportedLanguage = 'en',
+  sales: SalesRecord[] = [],
+  periodDays: number = 14
 ): WatchThisWeekItem[] {
   const items: WatchThisWeekItem[] = [];
 
@@ -136,13 +174,44 @@ export function generateWatchThisWeekItems(
     });
   }
 
+  // E. Category Domain Alert Rules for Watch This Week
+  if (category?.alertRules) {
+    for (const rule of category.alertRules) {
+      try {
+        const results = rule.evaluate({ inventory, sales, periodDays });
+        for (const res of results) {
+          if (res.triggered && res.section === 'week') {
+            items.push({
+              id: `cat-week-${rule.id}-${res.productId || 'store'}`,
+              productId: res.productId || 'CAT-ALERT',
+              productName: res.productName || category.labels[lang] || category.labels.en,
+              category: category.labels[lang] || category.labels.en,
+              headline: res.headline[lang] || res.headline.en,
+              reason: res.explanation[lang] || res.explanation.en,
+              supportingNumbers: res.supportingData,
+              recommendedAction: res.suggestedAction[lang] || res.suggestedAction.en,
+              howCalculated: res.supportingData,
+              targetSection: 'inventory',
+            });
+          }
+        }
+      } catch (e) {
+        console.warn(`Category rule ${rule.id} evaluation error:`, e);
+      }
+    }
+  }
+
   return items;
 }
 
 // 3. DOING WELL: Positive business signals
 export function generateDoingWellItems(
   inventory: CalculatedInventoryItem[],
-  productPerformance: ProductPerformance[]
+  productPerformance: ProductPerformance[],
+  category?: CategoryConfig,
+  lang: SupportedLanguage = 'en',
+  sales: SalesRecord[] = [],
+  periodDays: number = 14
 ): DoingWellItem[] {
   const items: DoingWellItem[] = [];
 
@@ -199,13 +268,43 @@ export function generateDoingWellItems(
     });
   }
 
+  // D. Category Domain Alert Rules for Doing Well
+  if (category?.alertRules) {
+    for (const rule of category.alertRules) {
+      try {
+        const results = rule.evaluate({ inventory, sales, periodDays });
+        for (const res of results) {
+          if (res.triggered && res.section === 'well') {
+            items.push({
+              id: `cat-well-${rule.id}-${res.productId || 'store'}`,
+              productId: res.productId || 'CAT-ALERT',
+              productName: res.productName || category.labels[lang] || category.labels.en,
+              category: category.labels[lang] || category.labels.en,
+              headline: res.headline[lang] || res.headline.en,
+              positiveSignal: res.explanation[lang] || res.explanation.en,
+              supportingNumbers: res.supportingData,
+              takeaway: res.suggestedAction[lang] || res.suggestedAction.en,
+              targetSection: 'inventory',
+            });
+          }
+        }
+      } catch (e) {
+        console.warn(`Category rule ${rule.id} evaluation error:`, e);
+      }
+    }
+  }
+
   return items;
 }
 
 // 4. Owner-Friendly AI Recommendations
 export function generateAIRecommendations(
   inventory: CalculatedInventoryItem[],
-  productPerformance: ProductPerformance[]
+  productPerformance: ProductPerformance[],
+  category?: CategoryConfig,
+  lang: SupportedLanguage = 'en',
+  sales: SalesRecord[] = [],
+  periodDays: number = 14
 ): AIRecommendation[] {
   const recommendations: AIRecommendation[] = [];
 
@@ -266,6 +365,35 @@ export function generateAIRecommendations(
       howCalculated: `${item.stockOnHand} units in stock × ${formatINR(item.unitCost)} wholesale cost = ${formatINR(item.deadStockValue)} in idle cash.`,
       targetSection: 'inventory',
     });
+  }
+
+  // Category Domain Alert Rules for Recommendations
+  if (category?.alertRules) {
+    for (const rule of category.alertRules) {
+      try {
+        const results = rule.evaluate({ inventory, sales, periodDays });
+        for (const res of results) {
+          if (res.triggered) {
+            recommendations.push({
+              id: `rec-cat-${rule.id}-${res.productId || 'store'}`,
+              priority: rule.priority === 'critical' ? 'high' : rule.priority === 'warning' ? 'medium' : 'low',
+              category: `${category.labels[lang] || category.labels.en} Intelligence`,
+              title: res.headline[lang] || res.headline.en,
+              productId: res.productId || 'CAT-ALERT',
+              productName: res.productName || category.labels[lang] || category.labels.en,
+              whatIsHappening: res.explanation[lang] || res.explanation.en,
+              supportingNumbers: res.supportingData,
+              whyOwnerShouldCare: res.explanation[lang] || res.explanation.en,
+              recommendedNextStep: res.suggestedAction[lang] || res.suggestedAction.en,
+              howCalculated: res.supportingData,
+              targetSection: 'inventory',
+            });
+          }
+        }
+      } catch (e) {
+        console.warn(`Category recommendation rule ${rule.id} error:`, e);
+      }
+    }
   }
 
   // Overstock

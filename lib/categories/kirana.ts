@@ -1,0 +1,193 @@
+import { CategoryConfig } from './types';
+import { INITIAL_INVENTORY, INITIAL_SALES_RECORDS, STORE_NAME, STORE_LOCATION } from '@/lib/demo-data';
+
+export const kiranaCategory: CategoryConfig = {
+  id: 'kirana',
+  icon: 'Store',
+  labels: {
+    en: 'Kirana & Grocery',
+    kn: 'ಕಿರಾಣಿ & ದಿನಸಿ (Kirana)',
+    hi: 'किराना एवं ग्रोसरी (Kirana)',
+  },
+  description: {
+    en: 'Grocery stores, provision shops, supermarkets, and daily essentials',
+    kn: 'ದಿನಸಿ ಅಂಗಡಿಗಳು, ಪ್ರಾವಿಷನ್ ಸ್ಟೋರ್ ಮತ್ತು ಸೂಪರ್‌ಮಾರ್ಕೆಟ್‌ಗಳು',
+    hi: 'किराना दुकान, प्रोविजन स्टोर, सुपरमार्केट और दैनिक आवश्यकताएं',
+  },
+  defaultBufferDays: 7,
+  defaultLeadDays: 3,
+  productFields: [
+    {
+      key: 'unitType',
+      label: { en: 'Unit Type', kn: 'ಯೂನಿಟ್ ಪ್ರಕಾರ', hi: 'इकाई प्रकार' },
+      type: 'select',
+      options: ['Packet', 'Kg', 'Liter', 'Gram', 'Bottle', 'Box'],
+      isGridColumn: true,
+      format: (v) => String(v || 'Packet'),
+    },
+    {
+      key: 'mrp',
+      label: { en: 'MRP (₹)', kn: 'ಗರಿಷ್ಠ ಮಾರಾಟ ಬೆಲೆ (MRP)', hi: 'एमआरपी (MRP)' },
+      type: 'number',
+      isGridColumn: true,
+      format: (v) => (v ? `₹${v}` : '-'),
+    },
+  ],
+  terms: {
+    stock: { en: 'Stock on Shelves', kn: 'ಶೆಲ್ಫ್‌ನಲ್ಲಿರುವ ದಾಸ್ತಾನು', hi: 'दुकान में स्टॉक' },
+    supplier: { en: 'Wholesale Distributor', kn: 'ಸಗಟು ವಿತರಕರು', hi: 'थोक वितरक / सप्लायर' },
+    leadTime: { en: 'Supplier Delivery Time', kn: 'ಡೆಲಿವರಿ ತಲುಪುವ ದಿನಗಳು', hi: 'सप्लाई पहुंचने का समय' },
+    itemUnit: { en: 'packets / units', kn: 'ಪ್ಯಾಕೆಟ್ / ಯೂನಿಟ್', hi: 'पैकेट / यूनिट' },
+    reorderAction: { en: 'Place Order with Distributor', kn: 'ವಿತರಕರಿಗೆ ಆರ್ಡರ್ ನೀಡಿ', hi: 'सप्लायर को ऑर्डर भेजें' },
+  },
+  alertRules: [
+    {
+      id: 'fast_stockout',
+      priority: 'critical',
+      evaluate: ({ inventory }) => {
+        return inventory
+          .filter((i) => i.isStockoutRisk)
+          .map((item) => ({
+            triggered: true,
+            productId: item.productId,
+            productName: item.productName,
+            headline: {
+              en: `${item.productName} may run out before delivery`,
+              kn: `${item.productName} ಡೆಲಿವರಿ ಬರುವ ಮೊದಲೇ ಖಾಲಿಯಾಗಬಹುದು`,
+              hi: `${item.productName} डिलीवरी आने से पहले खत्म हो सकता है`,
+            },
+            explanation: {
+              en: `About ${item.daysOfCover} days of shelf stock left, while distributor delivery takes ${item.supplierLeadDays} days.`,
+              kn: `ಕೇವಲ ~${item.daysOfCover} ದಿನಗಳ ದಾಸ್ತಾನು ಉಳಿದಿದೆ (ಡೆಲಿವರಿಗೆ ${item.supplierLeadDays} ದಿನ ಬೇಕಾಗುತ್ತದೆ).`,
+              hi: `केवल ~${item.daysOfCover} दिन का स्टॉक बचा है (सप्लाई में ${item.supplierLeadDays} दिन लगते हैं)।`,
+            },
+            supportingData: `Stock: ${item.stockOnHand} | Demand: ~${item.avgDailySales}/day | Lead: ${item.supplierLeadDays}d`,
+            suggestedAction: {
+              en: `Order ${item.recommendedReorderQty} units today to avoid empty shelves.`,
+              kn: `ಶೆಲ್ಫ್ ಖಾಲಿಯಾಗದಂತೆ ಇಂದೇ ${item.recommendedReorderQty} ಯೂನಿಟ್‌ಗಳನ್ನು ಆರ್ಡರ್ ಮಾಡಿ.`,
+              hi: `खाली शेल्फ से बचने के लिए आज ही ${item.recommendedReorderQty} यूनिट्स ऑर्डर करें।`,
+            },
+            impactValue: item.recommendedReorderQty * item.retailPrice,
+            section: 'today',
+          }));
+      },
+    },
+    {
+      id: 'dead_inventory',
+      priority: 'warning',
+      evaluate: ({ inventory }) => {
+        return inventory
+          .filter((i) => i.isDeadStock)
+          .map((item) => ({
+            triggered: true,
+            productId: item.productId,
+            productName: item.productName,
+            headline: {
+              en: `Money locked in slow-moving ${item.productName}`,
+              kn: `${item.productName} ನಲ್ಲಿ ಸಿಲುಕಿರುವ ಬಂಡವಾಳ`,
+              hi: `${item.productName} में फंसा हुआ पैसा`,
+            },
+            explanation: {
+              en: `${item.stockOnHand} units sitting unsold with ₹${item.deadStockValue.toLocaleString('en-IN')} locked up at cost.`,
+              kn: `${item.stockOnHand} ಯೂನಿಟ್‌ಗಳು ಮಾರಾಟವಾಗದೆ ₹${item.deadStockValue.toLocaleString('en-IN')} ಬಂಡವಾಳ ಸಿಲುಕಿದೆ.`,
+              hi: `${item.stockOnHand} यूनिट्स बिना बिके पड़े हैं और ₹${item.deadStockValue.toLocaleString('en-IN')} की पूंजी फंसी है।`,
+            },
+            supportingData: `Stock: ${item.stockOnHand} units | Cost Value: ₹${item.deadStockValue.toLocaleString('en-IN')}`,
+            suggestedAction: {
+              en: 'Offer 15-20% discount bundle near checkout to recover cash.',
+              kn: 'ಹಣ ಮರಳಿ ಪಡೆಯಲು ಕೌಂಟರ್ ಬಳಿ 15-20% ರಿಯಾಯಿತಿ ಕಾಂಬೊ ನೀಡಿ.',
+              hi: 'नकदी निकालने के लिए काउंटर के पास 15-20% छूट का कॉम्बो ऑफर दें।',
+            },
+            impactValue: item.deadStockValue,
+            section: 'week',
+          }));
+      },
+    },
+  ],
+  kpis: [
+    {
+      id: 'kirana_fast_moving_share',
+      label: { en: 'Class A Fast-Movers', kn: 'ವೇಗವಾಗಿ ಮಾರಾಟವಾಗುವ ವಸ್ತುಗಳು', hi: 'तेजी से बिकने वाले मुख्य सामान' },
+      tooltip: { en: 'Share of store revenue generated by top 20% products', kn: 'ಟಾಪ್ ಉತ್ಪನ್ನಗಳಿಂದ ಬಂದ ಒಟ್ಟು ಆದಾಯದ ಪಾಲು', hi: 'शीर्ष उत्पादों से होने वाली कमाई का प्रतिशत' },
+      compute: ({ inventory }) => {
+        const classA = inventory.filter((i) => i.abcClass === 'A');
+        return {
+          value: `${classA.length} SKUs`,
+          sublabel: 'Drives ~70% turnover',
+          status: 'optimal',
+        };
+      },
+    },
+    {
+      id: 'kirana_stockout_risk_count',
+      label: { en: 'Urgent Replenishments', kn: 'ತುರ್ತು ರೀಆರ್ಡರ್‌ಗಳು', hi: 'तत्काल रीऑर्डर' },
+      tooltip: { en: 'SKUs where shelf stock is less than supplier lead time', kn: 'ಸರಬರಾಜುದಾರರ ಡೆಲಿವರಿಗಿಂತ ಕಡಿಮೆ ದಾಸ್ತಾನು ಇರುವ ವಸ್ತುಗಳು', hi: 'सामान जिनका स्टॉक डिलीवरी समय से कम है' },
+      compute: ({ inventory }) => {
+        const risks = inventory.filter((i) => i.isStockoutRisk);
+        return {
+          value: `${risks.length} Items`,
+          numericValue: risks.length,
+          status: risks.length > 0 ? 'critical' : 'optimal',
+          sublabel: risks.length > 0 ? 'Stockout imminent' : 'All shelves covered',
+        };
+      },
+    },
+  ],
+  seasonality: [
+    {
+      id: 'ugadi',
+      name: { en: 'Ugadi Festive Surge', kn: 'ಯುಗಾದಿ ಹಬ್ಬದ ಖರೀದಿ', hi: 'उगादि पर्व' },
+      startMonth: 3,
+      startDay: 20,
+      endMonth: 4,
+      endDay: 10,
+      multiplier: 1.35,
+      rationale: { en: 'Cooking oil, sugar, jaggery, pulses demand surges by 35%', kn: 'ಎಣ್ಣೆ, ಸಕ್ಕರೆ, ಬೇಳೆಕಾಳುಗಳ ಬೇಡಿಕೆ 35% ಹೆಚ್ಚಾಗುತ್ತದೆ', hi: 'तेल, चीनी, दालों की मांग 35% बढ़ती है' },
+    },
+    {
+      id: 'diwali',
+      name: { en: 'Diwali Festive Rush', kn: 'ದೀಪಾವಳಿ ಹಬ್ಬದ ಬೇಡಿಕೆ', hi: 'दिवाली त्योहारी सीजन' },
+      startMonth: 10,
+      startDay: 15,
+      endMonth: 11,
+      endDay: 15,
+      multiplier: 1.45,
+      rationale: { en: 'Ghee, sweets, dry fruits, snacks surge by 45%', kn: 'ತುಪ್ಪ, ಸಿಹಿತಿಂಡಿ ಮತ್ತು ತಿನಿಸುಗಳ ಬೇಡಿಕೆ 45% ಹೆಚ್ಚಳ', hi: 'घी, मिठाइयां और नमकीन की बिक्री 45% उछलती है' },
+    },
+  ],
+  whatsappTemplates: {
+    order: (storeName, productName, qty, _extra, lang = 'en') => {
+      if (lang === 'kn') {
+        return `ನಮಸ್ಕಾರ, ${storeName} ಕಿರಾಣಿ ಅಂಗಡಿಯಿಂದ. ನಮಗೆ ${productName} ನ ${qty} ಯೂನಿಟ್‌ಗಳು ತುರ್ತಾಗಿ ಬೇಕಾಗಿದೆ. ದಯವಿಟ್ಟು ಬೇಗ ಡೆಲಿವರಿ ಕಳುಹಿಸಿ. ಧನ್ಯವಾದಗಳು!`;
+      }
+      if (lang === 'hi') {
+        return `नमस्ते, ${storeName} किराना स्टोर की ओर से। हमें ${productName} के ${qty} यूनिट्स की आवश्यकता है। कृपया जल्द से जल्द डिलीवरी भेजें। धन्यवाद!`;
+      }
+      return `Hello from ${storeName}. Please confirm replenishment order for ${qty} units of ${productName}. Earliest delivery requested. Thank you!`;
+    },
+    summary: (storeName, salesStr, riskCount, lang = 'en') => {
+      if (lang === 'kn') {
+        return `*${storeName} ದಿನದ ವರದಿ*\nಒಟ್ಟು ಮಾರಾಟ: ${salesStr}\nತುರ್ತು ಆರ್ಡರ್ ಮಾಡಬೇಕಾದ ವಸ್ತುಗಳು: ${riskCount}\nBizCopilot ಮೂಲಕ ರಚಿಸಲಾಗಿದೆ.`;
+      }
+      if (lang === 'hi') {
+        return `*${storeName} दैनिक रिपोर्ट*\nकुल बिक्री: ${salesStr}\nरीऑर्डर के लिए तत्काल सामान: ${riskCount}\nBizCopilot द्वारा जनरेटेड।`;
+      }
+      return `*${storeName} Daily Update*\nTotal Sales: ${salesStr}\nStockout Risks: ${riskCount}\nGenerated by BizCopilot.`;
+    },
+  },
+  demoDataset: () => ({
+    store: {
+      name: STORE_NAME,
+      type: 'Grocery & Supermarket',
+      location: STORE_LOCATION,
+    },
+    products: INITIAL_INVENTORY.map((p) => ({
+      ...p,
+      attributes: {
+        unitType: p.category === 'Cooking Essentials' ? 'Liter' : p.category === 'Dairy' ? 'Bottle' : 'Packet',
+        mrp: Math.round(p.retailPrice * 1.05),
+      },
+    })),
+    sales: INITIAL_SALES_RECORDS,
+  }),
+};
