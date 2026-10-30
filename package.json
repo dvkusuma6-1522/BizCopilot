@@ -12,6 +12,8 @@
   "dependencies": {
     "@google/genai": "^2.32.0",
     "@types/papaparse": "^5.5.2",
+    "@upstash/ratelimit": "^2.2.0",
+    "@upstash/redis": "^1.40.0",
     "clsx": "^2.1.1",
     "dexie": "^4.4.7",
     "framer-motion": "^14.8.0",
@@ -23,7 +25,8 @@
     "react-dom": "^18",
     "recharts": "^3.10.1",
     "tailwind-merge": "^3.7.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^20",
