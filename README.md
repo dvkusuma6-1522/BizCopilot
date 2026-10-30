@@ -23,18 +23,33 @@
 
 ---
 
+## Environment Variables
+
+BizCopilot is designed to work immediately with **zero required environment variables**. If `GEMINI_API_KEY` is not provided, the app runs in deterministic rule-based mode. Adding the key enables Google Gemini 2.5 Flash enhancements.
+
+| Variable Name | Required? | Default | Where to Set | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `GEMINI_API_KEY` | **No** (Optional) | _None_ | `.env.local` / Vercel Dashboard | Google Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey). When absent, the app works in rule-based mode; smart AI features activate once set. |
+| `GEMINI_MODEL` | **No** (Optional) | `gemini-2.5-flash` | `.env.local` / Vercel Dashboard | Gemini model family to invoke. |
+| `UPSTASH_REDIS_REST_URL` | **No** (Optional) | _None_ | `.env.local` / Vercel Dashboard | Upstash Redis REST URL for distributed rate limiting across serverless regions. If omitted, pure in-memory rate limiting is used. |
+| `UPSTASH_REDIS_REST_TOKEN` | **No** (Optional) | _None_ | `.env.local` / Vercel Dashboard | Upstash Redis REST token for rate limiting. |
+
+> **Security Note:** `GEMINI_API_KEY` is strictly used server-side in Next.js Route Handlers (`app/api/`). It is never exposed to the client bundle or prefixed with `NEXT_PUBLIC_`. `.env.local` is included in `.gitignore`.
+
+---
+
 ## Quickstart & Local Setup
 
 ### 1. Prerequisites
-- Node.js `v20` or higher
-- npm `v10` or higher
+- Node.js `>=20.0.0`
+- npm `>=10.0.0`
 
 ### 2. Install Dependencies
 ```bash
 npm install
 ```
 
-### 3. Get a Free Google Gemini API Key
+### 3. (Optional) Get a Free Google Gemini API Key
 BizCopilot runs completely on Google Gemini's free tier (no credit card required):
 1. Visit [Google AI Studio](https://aistudio.google.com/apikey).
 2. Sign in with your Google account.
@@ -46,10 +61,10 @@ Copy the `.env.example` file to `.env.local`:
 cp .env.example .env.local
 ```
 
-Open `.env.local` and add your Gemini API key:
+Open `.env.local` and add your Gemini API key (or leave empty to test rule-based mode):
 ```ini
 # Google Gemini API Configuration (Server-side only)
-GEMINI_API_KEY=AIzaSy...your_actual_key_here...
+GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-2.5-flash
 
 # Optional: Upstash Redis for distributed rate limiting across serverless instances
@@ -57,8 +72,6 @@ GEMINI_MODEL=gemini-2.5-flash
 # UPSTASH_REDIS_REST_URL=https://...
 # UPSTASH_REDIS_REST_TOKEN=...
 ```
-
-> **Security Note:** `GEMINI_API_KEY` is strictly used server-side in Next.js Route Handlers (`app/api/`). It is never exposed to the client bundle or prefixed with `NEXT_PUBLIC_`. `.env.local` is included in `.gitignore`.
 
 ### 5. Run Development Server
 ```bash
@@ -71,6 +84,10 @@ Open [http://localhost:3000](http://localhost:3000) on your desktop or mobile br
 # Run all Vitest unit tests (deterministic engine, voice parser, Gemini client, API routes)
 npm test
 
+# Run linter and type checks
+npm run lint
+npx tsc --noEmit
+
 # Verify production Next.js build
 npm run build
 ```
@@ -79,14 +96,25 @@ npm run build
 
 ## Deploying to Vercel (Hobby Free Tier)
 
-1. Push your repository to GitHub.
-2. Go to the [Vercel Dashboard](https://vercel.com/dashboard) and click **"Add New" -> "Project"**.
+BizCopilot deploys smoothly to Vercel's Hobby (free) tier as a unified Next.js App Router PWA.
+
+### Zero-Config Initial Deployment (App Works Without Key)
+1. Push your repository branch to GitHub.
+2. In the [Vercel Dashboard](https://vercel.com/dashboard), click **"Add New" $\rightarrow$ "Project"**.
 3. Import your GitHub repository.
-4. Under **"Environment Variables"**, add:
+4. **Deploy without environment variables first:** The app will build successfully. Without `GEMINI_API_KEY`, the app runs in deterministic rule-based mode:
+   - The dashboard and inventory calculations work 100% locally.
+   - The AI Advisor provides deterministic advice with a *"Rule-Based Mode"* badge.
+   - The quick action button displays *"AI bill reading is coming soon. You can add items manually."*
+
+### Activating Google Gemini 2.5 Flash
+1. Go to your project in the Vercel Dashboard $\rightarrow$ **Settings** $\rightarrow$ **Environment Variables**.
+2. Add:
    - `GEMINI_API_KEY`: Your key from Google AI Studio.
-   - `GEMINI_MODEL`: `gemini-2.5-flash` (or your preferred Gemini model).
-   - *(Optional)* `UPSTASH_REDIS_REST_URL` & `UPSTASH_REDIS_REST_TOKEN` if you want distributed rate limiting.
-5. Click **Deploy**. Vercel will build and deploy the Next.js App Router PWA automatically.
+   - `GEMINI_MODEL`: `gemini-2.5-flash`
+   - *(Optional)* `UPSTASH_REDIS_REST_URL` & `UPSTASH_REDIS_REST_TOKEN`
+3. Trigger a **Redeploy** from the Deployments tab.
+4. Smart AI features (streaming conversational advisor & multimodal bill OCR) activate immediately!
 
 ---
 

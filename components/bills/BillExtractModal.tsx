@@ -24,6 +24,7 @@ interface BillExtractModalProps {
   onClose: () => void;
   inventory: InventoryItem[];
   lang?: SupportedLanguage;
+  aiAvailable?: boolean;
   onRecordStockIn: (
     items: { productId: string; quantity: number; unitCost?: number }[]
   ) => Promise<void>;
@@ -35,6 +36,7 @@ export const BillExtractModal: React.FC<BillExtractModalProps> = ({
   onClose,
   inventory,
   lang = 'en',
+  aiAvailable = true,
   onRecordStockIn,
   onAddNewProduct,
 }) => {
@@ -62,7 +64,7 @@ export const BillExtractModal: React.FC<BillExtractModalProps> = ({
     en: {
       title: 'Scan Supplier Bill',
       subtitle: 'Photo of invoice directly to stock inventory',
-      consentNotice: 'Privacy Notice: This image is sent to Google Gemini to extract text and is not stored by BizCopilot. Your sales data and customer records never leave your device.',
+      consentNotice: 'Privacy Notice: This bill image is sent to Google Gemini to extract text and is not stored by BizCopilot. Your raw sales transactions and customer records stay on your device.',
       captureButton: 'Take Photo of Bill',
       uploadButton: 'Choose from Gallery',
       processing: 'Analyzing bill with Gemini...',
@@ -75,12 +77,13 @@ export const BillExtractModal: React.FC<BillExtractModalProps> = ({
       quotaExceeded: 'Daily AI scan quota reached for Google Gemini. You can enter items manually below.',
       rateLimited: 'Rate limit reached (10 requests/min). Please wait a moment before trying again.',
       fileTooLarge: 'Image is larger than 4 MB. Please use a smaller or compressed photo.',
+      aiUnavailableNotice: 'AI bill reading is coming soon. You can add items manually.',
       genericError: 'Failed to extract bill items. You can add items manually below.',
     },
     kn: {
       title: 'ಸರಬರಾಜುದಾರರ ಬಿಲ್ ಸ್ಕ್ಯಾನ್',
       subtitle: 'ಬಿಲ್ ಫೋಟೋದಿಂದ ನೇರವಾಗಿ ಸ್ಟಾಕ್‌ಗೆ ನಮೂದಿಸಿ',
-      consentNotice: 'ಗೌಪ್ಯತೆ ಮಾಹಿತಿ: ಬಿಲ್ ವಿವರಗಳನ್ನು ಓದಲು ಮಾತ್ರ ಈ ಚಿತ್ರವನ್ನು ಗೂಗಲ್ ಜೆಮಿನಿಗೆ (Google Gemini) ಕಳುಹಿಸಲಾಗುತ್ತದೆ, ಬಿಜ್‌ಕೋಪೈಲಟ್‌ನಲ್ಲಿ ಸಂಗ್ರಹಿಸಲಾಗುವುದಿಲ್ಲ. ನಿಮ್ಮ ಮಾರಾಟದ ಮಾಹಿತಿ ಸಾಧನದಲ್ಲೇ ಇರುತ್ತದೆ.',
+      consentNotice: 'ಗೌಪ್ಯತೆ ಮಾಹಿತಿ: ಬಿಲ್ ವಿವರಗಳನ್ನು ಓದಲು ಮಾತ್ರ ಈ ಚಿತ್ರವನ್ನು ಗೂಗಲ್ ಜೆಮಿನಿಗೆ ಕಳುಹಿಸಲಾಗುತ್ತದೆ ಮತ್ತು ಬಿಜ್‌ಕೋಪೈಲಟ್‌ನಲ್ಲಿ ಸಂಗ್ರಹಿಸಲಾಗುವುದಿಲ್ಲ. ನಿಮ್ಮ ಮಾರಾಟದ ವಿವರಗಳು ಮತ್ತು ಗ್ರಾಹಕರ ದಾಖಲೆಗಳು ಸಾಧನದಲ್ಲೇ ಇರುತ್ತವೆ.',
       captureButton: 'ಬಿಲ್ ಫೋಟೋ ತೆಗೆಯಿರಿ',
       uploadButton: 'ಗ್ಯಾಲರಿಯಿಂದ ಆಯ್ಕೆಮಾಡಿ',
       processing: 'ಜೆಮಿನಿ ಮೂಲಕ ಬಿಲ್ ಪರಿಶೀಲಿಸಲಾಗುತ್ತಿದೆ...',
@@ -93,12 +96,13 @@ export const BillExtractModal: React.FC<BillExtractModalProps> = ({
       quotaExceeded: 'ಗೂಗಲ್ ಜೆಮಿನಿ ದಿನದ ಎಐ ಮಿತಿ ಮೀರಿದೆ. ದಯವಿಟ್ಟು ಕೆಳಗೆ ಹಸ್ತಚಾಲಿತವಾಗಿ ಸರಕುಗಳನ್ನು ಸೇರಿಸಿ.',
       rateLimited: 'ಹೆಚ್ಚಿನ ವಿನಂತಿಗಳು ಬಂದಿವೆ. ದಯವಿಟ್ಟು ಸ್ವಲ್ಪ ಸಮಯ ಕಾಯಿರಿ.',
       fileTooLarge: 'ಫೋಟೋ ಗಾತ್ರ 4 MB ಗಿಂತ ಹೆಚ್ಚಾಗಿದೆ. ದಯವಿಟ್ಟು ಚಿಕ್ಕ ಫೋಟೋ ಬಳಸಿ.',
+      aiUnavailableNotice: 'ಎಐ ಬಿಲ್ ಓದುವಿಕೆ ಶೀಘ್ರದಲ್ಲೇ ಬರಲಿದೆ. ನೀವು ವಸ್ತುಗಳನ್ನು ಹಸ್ತಚಾಲಿತವಾಗಿ ಸೇರಿಸಬಹುದು.',
       genericError: 'ಬಿಲ್ ವಿವರಗಳನ್ನು ಓದಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಹಸ್ತಚಾಲಿತವಾಗಿ ಸೇರಿಸಿ.',
     },
     hi: {
       title: 'सप्लायर बिल स्कैन करें',
       subtitle: 'बिल की फोटो से सीधे स्टॉक एंट्री करें',
-      consentNotice: 'गोपनीयता सूचना: यह फोटो केवल बिल से टेक्स्ट निकालने के लिए गूगल जेमिनी (Google Gemini) को भेजी जाती है, और BizCopilot द्वारा स्टोर नहीं की जाती है। आपका बिक्री डेटा हमेशा आपके फोन में ही रहता है।',
+      consentNotice: 'गोपनीयता सूचना: यह बिल फोटो केवल टेक्स्ट निकालने के लिए गूगल जेमिनी को भेजी जाती है और BizCopilot द्वारा स्टोर नहीं की जाती है। आपके विस्तृत बिक्री और ग्राहक रिकॉर्ड फोन पर ही रहते हैं।',
       captureButton: 'बिल की फोटो खींचें',
       uploadButton: 'गैलरी से फोटो चुनें',
       processing: 'जेमिनी बिल का विश्लेषण कर रहा है...',
@@ -111,12 +115,13 @@ export const BillExtractModal: React.FC<BillExtractModalProps> = ({
       quotaExceeded: 'गूगल जेमिनी का दैनिक एआई कोटा समाप्त हो गया है। कृपया नीचे हाथ से सामान जोड़ें।',
       rateLimited: 'अनुरोध सीमा पार हो गई है। कृपया थोड़ी देर बाद प्रयास करें।',
       fileTooLarge: 'फोटो 4 MB से बड़ी है। कृपया छोटी या कंप्रेस की गई फोटो चुनें।',
+      aiUnavailableNotice: 'एआई बिल रीडिंग जल्द ही आ रही है। आप सामान हाथ से जोड़ सकते हैं।',
       genericError: 'बिल पढ़ने में समस्या हुई। कृपया नीचे हाथ से सामान जोड़ें।'
     },
   }[lang] || {
     title: 'Scan Supplier Bill',
     subtitle: 'Photo of invoice directly to stock inventory',
-    consentNotice: 'Privacy Notice: This image is sent to Google Gemini to extract text and is not stored by BizCopilot. Your sales data and customer records never leave your device.',
+    consentNotice: 'Privacy Notice: This bill image is sent to Google Gemini to extract text and is not stored by BizCopilot. Your raw sales transactions and customer records stay on your device.',
     captureButton: 'Take Photo of Bill',
     uploadButton: 'Choose from Gallery',
     processing: 'Analyzing bill with Gemini...',
@@ -129,6 +134,7 @@ export const BillExtractModal: React.FC<BillExtractModalProps> = ({
     quotaExceeded: 'Daily AI scan quota reached for Google Gemini. You can enter items manually below.',
     rateLimited: 'Rate limit reached (10 requests/min). Please wait a moment before trying again.',
     fileTooLarge: 'Image is larger than 4 MB. Please use a smaller or compressed photo.',
+    aiUnavailableNotice: 'AI bill reading is coming soon. You can add items manually.',
     genericError: 'Failed to extract bill items. You can add items manually below.',
   };
 
@@ -198,7 +204,13 @@ export const BillExtractModal: React.FC<BillExtractModalProps> = ({
 
       if (!res.ok || !data.success) {
         let errorMsg = data.error || t.genericError;
-        if (data.errorCode === 'QUOTA_EXCEEDED') {
+        if (
+          data.code === 'AI_NOT_CONFIGURED' ||
+          data.errorCode === 'AI_NOT_CONFIGURED' ||
+          res.status === 503
+        ) {
+          errorMsg = t.aiUnavailableNotice;
+        } else if (data.errorCode === 'QUOTA_EXCEEDED' || res.status === 429) {
           errorMsg = t.quotaExceeded;
         } else if (data.errorCode === 'RATE_LIMIT_EXCEEDED') {
           errorMsg = t.rateLimited;
@@ -353,6 +365,36 @@ export const BillExtractModal: React.FC<BillExtractModalProps> = ({
         <div className="p-4 overflow-y-auto space-y-4 flex-1">
           {step === 'capture' && (
             <div className="space-y-4">
+              {!aiAvailable && (
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-3">
+                  <div className="flex items-center gap-2 font-bold text-sm text-amber-950">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span>{t.aiUnavailableNotice}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReviewLines([
+                        {
+                          id: `line-${Date.now()}`,
+                          selected: true,
+                          name: '',
+                          quantity: 10,
+                          unitPrice: 100,
+                          matchedProductId: 'NEW_PRODUCT',
+                          confidence: 0,
+                        },
+                      ]);
+                      setStep('review');
+                    }}
+                    className="w-full min-h-[48px] rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 active:scale-98 transition-all"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>{t.manualEntry}</span>
+                  </button>
+                </div>
+              )}
+
               {/* Privacy Consent Notice */}
               <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-700 text-xs flex items-start gap-3">
                 <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST as billExtractPOST } from '@/app/api/bill-extract/route';
 import { POST as advisorPOST } from '@/app/api/advisor/route';
+import { GET as aiStatusGET } from '@/app/api/ai-status/route';
 import { resetMemoryRateLimiter } from './rate-limit';
 
 // Mock gemini client helper functions
@@ -112,6 +113,25 @@ describe('app/api/bill-extract route', () => {
     expect(data.success).toBe(false);
     expect(data.errorCode).toBe('QUOTA_EXCEEDED');
     expect(data.fallback).toBe(true);
+  });
+
+  it('returns HTTP 503 with AI_NOT_CONFIGURED when GEMINI_API_KEY is not configured', async () => {
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
+
+    const req = new NextRequest('http://localhost/api/bill-extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64: 'data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      }),
+    });
+
+    const res = await billExtractPOST(req);
+    expect(res.status).toBe(503);
+    const data = await res.json();
+    expect(data.code).toBe('AI_NOT_CONFIGURED');
+    expect(data.stack).toBeUndefined();
   });
 });
 
@@ -239,5 +259,71 @@ describe('app/api/advisor route', () => {
 
     const text = await res.text();
     expect(text).toBe('Reorder Sunflower Oil today.');
+  });
+
+  it('returns deterministic fallback when Gemini quota is exceeded without failing', async () => {
+    vi.mocked(generateText).mockRejectedValueOnce(
+      new GeminiQuotaExceededError('Daily quota reached')
+    );
+
+    const payload = {
+      question: 'What should I do today?',
+      language: 'hi',
+      stream: false,
+      metrics: {
+        storeName: 'मेरी दुकान',
+        topSellers: [{ name: 'चावल', unitsSold: 20, revenue: 2000 }],
+        lowStock: [{ name: 'दाल', daysOfStockLeft: 1, supplierLeadDays: 2, recommendedReorder: 10 }],
+        weeklySalesTrend: [],
+        upcomingFestivals: [],
+      },
+    };
+
+    const req = new NextRequest('http://localhost/api/advisor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const res = await advisorPOST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.mode).toBe('deterministic');
+    expect(data.fallback).toBe(true);
+    expect(data.advice).toContain('दाल');
+  });
+});
+
+describe('app/api/ai-status route', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('returns available: true when GEMINI_API_KEY is configured', async () => {
+    process.env.GEMINI_API_KEY = 'test-valid-key';
+    const res = await aiStatusGET();
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data).toEqual({ available: true });
+    // Verify key is never leaked
+    expect((data as Record<string, unknown>).key).toBeUndefined();
+    expect((data as Record<string, unknown>).apiKey).toBeUndefined();
+  });
+
+  it('returns available: false when GEMINI_API_KEY is not set (never leaks key)', async () => {
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
+    const res = await aiStatusGET();
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data).toEqual({ available: false });
+    expect((data as Record<string, unknown>).key).toBeUndefined();
   });
 });

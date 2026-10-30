@@ -10,6 +10,11 @@ import {
 } from '@/lib/ai/gemini';
 import { checkRateLimit } from '@/lib/ai/rate-limit';
 
+// Node.js runtime required for SDK operations
+export const runtime = 'nodejs';
+// maxDuration in seconds (plan limits may apply: Hobby limit is 10s-60s depending on plan)
+export const maxDuration = 30;
+
 const AdvisorPayloadSchema = z.object({
   question: z.string().min(1, 'Question cannot be empty'),
   language: z.enum(['en', 'kn', 'hi']).default('en'),

@@ -60,19 +60,33 @@ export interface RateLimitResult {
 }
 
 /**
- * Extracts a client IP safely from request headers or socket.
+ * Extracts a client IP safely from request headers (x-forwarded-for on Vercel).
+ * Takes strictly the first address and handles missing or malformed headers safely.
  */
 export function getClientIp(req: Request): string {
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const first = forwarded.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  const realIp = req.headers.get('x-real-ip');
-  if (realIp) return realIp.trim();
+  try {
+    const forwarded = req.headers?.get?.('x-forwarded-for');
+    if (forwarded && typeof forwarded === 'string') {
+      const first = forwarded.split(',')[0]?.trim();
+      if (first && first.length > 0) {
+        // Strip optional IPv4/IPv6 port if attached
+        const clean = first.replace(/^\[/, '').replace(/\]:\d+$/, '').replace(/:\d+$/, '').trim();
+        if (clean.length > 0) return clean;
+      }
+    }
 
-  const cfIp = req.headers.get('cf-connecting-ip');
-  if (cfIp) return cfIp.trim();
+    const realIp = req.headers?.get?.('x-real-ip');
+    if (realIp && typeof realIp === 'string' && realIp.trim().length > 0) {
+      return realIp.trim();
+    }
+
+    const cfIp = req.headers?.get?.('cf-connecting-ip');
+    if (cfIp && typeof cfIp === 'string' && cfIp.trim().length > 0) {
+      return cfIp.trim();
+    }
+  } catch {
+    // Graceful fallback on any header error
+  }
 
   return '127.0.0.1';
 }

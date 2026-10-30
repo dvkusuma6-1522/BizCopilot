@@ -32,6 +32,7 @@ export interface AdvisorChatProps {
   category?: CategoryConfig;
   storeName?: string;
   festivals?: Festival[];
+  aiAvailable?: boolean;
 }
 
 interface ChatItem {
@@ -51,6 +52,7 @@ export const AdvisorChat: React.FC<AdvisorChatProps> = ({
   category,
   storeName = 'My Shop',
   festivals = [],
+  aiAvailable = true,
 }) => {
   const [messages, setMessages] = useState<ChatItem[]>(() => {
     const welcomeText =
@@ -322,18 +324,36 @@ export const AdvisorChat: React.FC<AdvisorChatProps> = ({
                   ? 'AI व्यापार सलाहकार'
                   : 'Gemini AI Advisor'}
               </h2>
-              <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-extrabold">
-                Gemini 2.5 Flash
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                  aiAvailable
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-800 border border-amber-200'
+                }`}
+              >
+                {aiAvailable
+                  ? 'Gemini 2.5 Flash'
+                  : lang === 'kn'
+                  ? 'ನಿಯಮ-ಆಧಾರಿತ ಮೋಡ್'
+                  : lang === 'hi'
+                  ? 'नियम-आधारित मोड'
+                  : 'Rule-Based Mode'}
               </span>
             </div>
             <p className="text-xs text-slate-500 flex items-center gap-1">
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
               <span>
-                {lang === 'kn'
-                  ? 'ನಿಜವಾದ ಅಂಗಡಿ ಲೆಕ್ಕಾಚಾರಗಳು • ಲೈವ್ ಸ್ಟ್ರೀಮಿಂಗ್'
+                {aiAvailable
+                  ? lang === 'kn'
+                    ? 'ನಿಜವಾದ ಅಂಗಡಿ ಲೆಕ್ಕಾಚಾರಗಳು • ಲೈವ್ ಸ್ಟ್ರೀಮಿಂಗ್'
+                    : lang === 'hi'
+                    ? 'सटीक दुकान गणना • लाइव स्ट्रीमिंग'
+                    : 'Deterministic facts only • Live streaming'
+                  : lang === 'kn'
+                  ? 'ಸ್ಮಾರ್ಟ್ ಎಐ ಸಕ್ರಿಯವಾಗಿಲ್ಲ. ನಿಯಮ-ಆಧಾರಿತ ಮೋಡ್‌ನಲ್ಲಿದೆ.'
                   : lang === 'hi'
-                  ? 'सटीक दुकान गणना • लाइव स्ट्रीमिंग'
-                  : 'Deterministic facts only • Live streaming'}
+                  ? 'स्मार्ट एआई अभी सक्रिय नहीं है। नियम-आधारित मोड।'
+                  : 'Smart AI answers are not enabled yet. Operating in rule-based mode.'}
               </span>
             </p>
           </div>

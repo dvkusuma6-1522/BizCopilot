@@ -155,10 +155,20 @@ function MainDashboardApp() {
   const [dismissedFestivalIds, setDismissedFestivalIds] = useState<string[]>([]);
   const [digestNotificationEnabled, setDigestNotificationEnabled] = useState<boolean>(false);
   const [digestTime, setDigestTime] = useState<string>('08:00');
+  const [aiAvailable, setAiAvailable] = useState<boolean>(true);
 
   // Load persisted records from Dexie on client mount
   useEffect(() => {
     setIsMounted(true);
+
+    fetch('/api/ai-status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data?.available === 'boolean') {
+          setAiAvailable(data.available);
+        }
+      })
+      .catch(() => setAiAvailable(false));
 
     const loadData = async () => {
       try {
@@ -963,6 +973,7 @@ function MainDashboardApp() {
               category={category}
               storeName={businessProfile.businessName}
               festivals={FESTIVALS_DATA}
+              aiAvailable={aiAvailable}
             />
           )}
 
@@ -995,7 +1006,7 @@ function MainDashboardApp() {
       </div>
 
       {/* Floating Action Button (FAB) for fast entry */}
-      <QuickActionFAB onSelectAction={handleQuickAction} lang={lang} />
+      <QuickActionFAB onSelectAction={handleQuickAction} lang={lang} aiAvailable={aiAvailable} />
 
       {/* Mobile Bottom Navigation (Visible on screen < 1024px) */}
       <MobileBottomNav
@@ -1056,6 +1067,7 @@ function MainDashboardApp() {
         onClose={() => setIsBillExtractOpen(false)}
         inventory={inventoryItems}
         lang={lang}
+        aiAvailable={aiAvailable}
         onRecordStockIn={handleRecordStockIn}
         onAddNewProduct={handleAddNewProduct}
       />

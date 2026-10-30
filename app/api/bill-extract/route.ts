@@ -16,13 +16,19 @@ export interface ExtractedBillItem {
   unitPrice?: number;
 }
 
+// Node.js runtime required for SDK operations
+export const runtime = 'nodejs';
+// maxDuration in seconds (plan limits may apply: Hobby limit is 10s-60s depending on plan)
+export const maxDuration = 30;
+
 export interface ExtractedBillResponse {
   success: boolean;
+  code?: string;
   supplierName?: string;
   billDate?: string;
   items?: ExtractedBillItem[];
   error?: string;
-  errorCode?: 'RATE_LIMIT_EXCEEDED' | 'QUOTA_EXCEEDED' | 'KEY_MISSING' | 'FILE_TOO_LARGE' | 'INVALID_INPUT' | 'EXTRACTION_FAILED';
+  errorCode?: 'RATE_LIMIT_EXCEEDED' | 'QUOTA_EXCEEDED' | 'KEY_MISSING' | 'AI_NOT_CONFIGURED' | 'FILE_TOO_LARGE' | 'INVALID_INPUT' | 'EXTRACTION_FAILED';
   fallback?: boolean;
 }
 
@@ -43,6 +49,21 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 MB
 
 export async function POST(req: NextRequest): Promise<NextResponse<ExtractedBillResponse>> {
   try {
+    // 0. Verify AI key availability (return 503 AI_NOT_CONFIGURED if missing)
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (!apiKey || !apiKey.trim()) {
+      return NextResponse.json(
+        {
+          success: false,
+          fallback: true,
+          error: 'AI bill reading is not configured.',
+          errorCode: 'AI_NOT_CONFIGURED',
+          code: 'AI_NOT_CONFIGURED',
+        },
+        { status: 503 }
+      );
+    }
+
     // 1. Rate Limiting (10 requests/minute per IP)
     const rateLimit = await checkRateLimit(req, 10, 60);
     if (!rateLimit.success) {
@@ -135,12 +156,16 @@ CRITICAL RULES:
     });
   } catch (err: unknown) {
     if (err instanceof GeminiKeyMissingError) {
-      return NextResponse.json({
-        success: false,
-        fallback: true,
-        error: 'Gemini API key is not configured. You can enter items manually.',
-        errorCode: 'KEY_MISSING',
-      });
+      return NextResponse.json(
+        {
+          success: false,
+          fallback: true,
+          error: 'AI bill reading is not configured.',
+          errorCode: 'AI_NOT_CONFIGURED',
+          code: 'AI_NOT_CONFIGURED',
+        },
+        { status: 503 }
+      );
     }
 
     if (isQuotaExceededError(err) || err instanceof GeminiQuotaExceededError) {
