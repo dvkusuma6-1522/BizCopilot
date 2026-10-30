@@ -75,7 +75,7 @@ import { MoneySavedDialog } from '@/components/dashboard/MoneySavedDialog';
 import { SalesView } from '@/components/sales/SalesView';
 import { InventoryView } from '@/components/inventory/InventoryView';
 import { RecommendationsView } from '@/components/recommendations/RecommendationsView';
-import { CopilotChat } from '@/components/copilot/CopilotChat';
+import { AdvisorChat } from '@/components/advisor/AdvisorChat';
 import { DataImportView } from '@/components/upload/DataImportView';
 
 // Fast Onboarding & Entry Components
@@ -954,13 +954,15 @@ function MainDashboardApp() {
 
           {/* TAB 5: AI COPILOT */}
           {activeTab === 'copilot' && (
-            <CopilotChat
+            <AdvisorChat
               summary={periodSummary}
               inventory={inventoryMetrics}
               productPerformance={productPerformance}
+              salesTrend={salesTrend}
               lang={lang}
               category={category}
               storeName={businessProfile.businessName}
+              festivals={FESTIVALS_DATA}
             />
           )}
 

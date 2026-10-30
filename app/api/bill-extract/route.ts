@@ -26,14 +26,14 @@ export interface ExtractedBillResponse {
   fallback?: boolean;
 }
 
-export const BillItemSchema = z.object({
+const BillItemSchema = z.object({
   name: z.string().min(1, 'Item name cannot be empty'),
   quantity: z.number().positive().default(1),
   unit: z.string().optional(),
   unitPrice: z.number().nonnegative().optional(),
 });
 
-export const BillExtractResponseSchema = z.object({
+const BillExtractResponseSchema = z.object({
   supplierName: z.string().default(''),
   billDate: z.string().default(''),
   items: z.array(BillItemSchema).default([]),

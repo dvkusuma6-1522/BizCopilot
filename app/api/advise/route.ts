@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCategory } from '@/lib/categories/registry';
 import { BusinessCategoryId } from '@/lib/categories/types';
+import { generateText, getGeminiModel } from '@/lib/ai/gemini';
+import { checkRateLimit } from '@/lib/ai/rate-limit';
 
 import { DigestAction, renderDigestActionText } from '@/lib/engine/digest';
 
@@ -41,6 +43,14 @@ interface AdvisePayload {
 
 export async function POST(req: NextRequest) {
   try {
+    const rateLimit = await checkRateLimit(req, 10, 60);
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { success: false, error: 'Rate limit reached (10 requests/min).', errorCode: 'RATE_LIMIT_EXCEEDED' },
+        { status: 429 }
+      );
+    }
+
     const body: AdvisePayload = await req.json();
     const {
       categoryId = 'kirana',
@@ -135,34 +145,20 @@ USER QUESTION: ${
     : 'What should I act on today?')
 }`;
 
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: promptSystem }] }],
-              generationConfig: {
-                temperature: 0.2, // deterministic & factual
-                maxOutputTokens: 600,
-              },
-            }),
-          }
-        );
+        const aiText = await generateText(promptSystem, {
+          model: getGeminiModel(),
+          temperature: 0.2,
+        });
 
-        if (geminiRes.ok) {
-          const data = await geminiRes.json();
-          const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          if (aiText.trim()) {
-            return NextResponse.json({
-              success: true,
-              advice: aiText.trim(),
-              mode: 'ai-enhanced',
-              provider: 'Google Gemini',
-              categoryId,
-              numbersVerified: true,
-            });
-          }
+        if (aiText.trim()) {
+          return NextResponse.json({
+            success: true,
+            advice: aiText.trim(),
+            mode: 'ai-enhanced',
+            provider: 'Google Gemini',
+            categoryId,
+            numbersVerified: true,
+          });
         }
       } catch (geminiError) {
         console.warn('Gemini API call failed, falling back to deterministic advice:', geminiError);
